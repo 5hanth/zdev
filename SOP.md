@@ -1,143 +1,101 @@
-# zdev SOP
+# zdev Agent Workflow
 
-Standard Operating Procedure for `zdev` - Multi-agent worktree development.
+How to use zdev when working on features. This is your operational guide.
 
-## Overview
+## Before Starting Any Feature
 
-zdev manages isolated development environments for Convex + Vite projects:
-- Each feature gets its own git worktree
-- Separate port allocations (no conflicts)
-- Optional public preview URLs via Traefik
-- Automatic config file copying (.env.local, etc.)
-
-## Requirements
-
-- **Convex** backend (uses `convex dev`, `convex export/import`)
-- **Vite-based** frontend (TanStack Start, plain Vite, etc.)
-- **Bun** runtime
-- **Git** repository
-
-## Commands Reference
-
-### Initialize Project
 ```bash
-zdev init [path]
-  -s, --seed    Create initial seed snapshot
-```
-
-### Start Feature
-```bash
-zdev start <feature> [options]
-  -p, --project <path>      Project path (default: .)
-  --port <number>           Specific frontend port
-  --local                   Skip public URL setup
-  -s, --seed                Import seed data
-  -b, --base-branch <ref>   Base branch (default: origin/main)
-  -w, --web-dir <dir>       Web subdirectory (auto-detected)
-```
-
-### Stop Feature
-```bash
-zdev stop <feature> [options]
-  -p, --project <path>      Project path
-  -k, --keep                Keep worktree, just stop servers
-```
-
-### List Features
-```bash
+# Check what's already running
 zdev list
-  --json    Output as JSON
 ```
 
-### Clean Feature
+If your feature already exists, just `cd` to the worktree path shown.
+
+## Starting a New Feature
+
 ```bash
-zdev clean <feature> [options]
-  -p, --project <path>      Project path
-  -f, --force               Force remove
+# Start feature with public URL
+zdev start <feature-name> -p /path/to/project
+
+# Start without public URL (local only)
+zdev start <feature-name> -p /path/to/project --local
+
+# Start with seed data
+zdev start <feature-name> -p /path/to/project --seed
 ```
 
-### Seed Data
+After starting:
+1. Note the worktree path (e.g., `~/.zdev/worktrees/project-feature`)
+2. Note the local URL (e.g., `http://localhost:5173`)
+3. Note the public URL if available (e.g., `https://project-feature.dev.example.com`)
+4. `cd` to the worktree path to begin work
+
+## While Working
+
+You're in an isolated git worktree with its own:
+- Branch (`feature/<name>`)
+- Node modules
+- Convex dev instance
+- Port allocation
+
+Work normally. Commit often. Push when ready for review.
+
 ```bash
-zdev seed export [path]     Export current Convex state
-zdev seed import [path]     Import seed into current worktree
+git add .
+git commit -m "description"
+git push -u origin feature/<name>
 ```
 
-### Configuration
+## Stopping Work (End of Session)
+
 ```bash
-zdev config [options]
-  -l, --list               Show current config
-  -s, --set <key=value>    Set config value
-  -a, --add <pattern>      Add file pattern to copy
-  -r, --remove <pattern>   Remove file pattern
+# Stop servers but keep worktree (resume later)
+zdev stop <feature-name> -p /path/to/project --keep
+
+# Or just leave it running if you'll be back soon
 ```
 
-## Config Options
-
-| Key | Default | Description |
-|-----|---------|-------------|
-| `devDomain` | (empty) | Domain for preview URLs |
-| `dockerHostIp` | `172.17.0.1` | Docker host IP for Traefik |
-| `traefikConfigDir` | `/infra/traefik/dynamic` | Traefik file provider path |
-| `copyPatterns` | `.env.local`, etc. | Files to auto-copy |
-
-## Typical Workflow
+## Resuming Work
 
 ```bash
-# 1. Setup project (one-time)
-cd my-convex-project
-zdev init --seed
-
-# 2. Start feature
-zdev start add-auth -p .
-
-# 3. Work on feature
-cd ~/.zdev/worktrees/project-add-auth
-# ... make changes, commit, push ...
-
-# 4. Stop when done for the day
-zdev stop add-auth -p /path/to/project
-
-# 5. Clean up after PR merged
-zdev clean add-auth -p /path/to/project
-```
-
-## Multi-Agent Usage
-
-Multiple agents can work simultaneously:
-
-```bash
-# Agent A
-zdev start feature-auth -p ./project
-# Gets port 5173, https://project-feature-auth.dev.example.com
-
-# Agent B  
-zdev start feature-billing -p ./project
-# Gets port 5174, https://project-feature-billing.dev.example.com
-
 # Check status
 zdev list
+
+# If stopped, restart
+zdev start <feature-name> -p /path/to/project
+
+# If already running, just cd to the worktree
+cd ~/.zdev/worktrees/project-feature
 ```
+
+## After PR is Merged
+
+```bash
+# Clean up completely
+zdev clean <feature-name> -p /path/to/project
+```
+
+This removes:
+- The worktree
+- The Traefik route
+- The port allocation
+
+## Quick Reference
+
+| Task | Command |
+|------|---------|
+| See what's running | `zdev list` |
+| Start feature | `zdev start NAME -p PATH` |
+| Stop (keep files) | `zdev stop NAME -p PATH --keep` |
+| Stop (full) | `zdev stop NAME -p PATH` |
+| Remove after merge | `zdev clean NAME -p PATH` |
 
 ## Troubleshooting
 
-### Port conflict
-```bash
-zdev config --list  # Check nextFrontendPort
-# Manually specify port:
-zdev start feature --port 5200
-```
+**"Feature already exists"** → It's already running. Use `zdev list` to find the worktree path.
 
-### Worktree already exists
-```bash
-zdev clean feature -p ./project --force
-```
+**Port conflict** → Specify a port: `zdev start NAME --port 5200`
 
-### No public URL
-```bash
-# Check config
-zdev config --list
+**No public URL** → Either use `--local` or configure Traefik (see README).
 
-# Set domain
-zdev config --set devDomain=dev.example.com
-zdev config --set traefikConfigDir=/etc/traefik/dynamic
-```
+**Convex not working** → Make sure you've run `bunx convex dev` once in the main project to select a Convex project.
