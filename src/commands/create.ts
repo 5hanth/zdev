@@ -98,6 +98,7 @@ declare module '@tanstack/react-router' {
 const ROOT_ROUTE = `/// <reference types="vite/client" />
 import {
   HeadContent,
+  Outlet,
   Scripts,
   createRootRoute,
 } from '@tanstack/react-router'
@@ -120,6 +121,7 @@ function RootDocument() {
         <HeadContent />
       </head>
       <body>
+        <Outlet />
         <Scripts />
       </body>
     </html>
