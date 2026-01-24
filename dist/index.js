@@ -1901,7 +1901,7 @@ var DEFAULT_CONFIG = {
     ".env.development.local"
   ],
   dockerHostIp: "172.17.0.1",
-  devDomain: "dev.web3citadel.com",
+  devDomain: "",
   traefikConfigDir: "/infra/traefik/dynamic",
   allocations: {}
 };
@@ -2045,11 +2045,13 @@ function traefikRemoveRoute(name) {
 }
 function getTraefikStatus() {
   const config = loadConfig();
-  const result = run("curl", ["-s", "-o", "/dev/null", "-w", "%{http_code}", "http://localhost:8080/api/overview"]);
-  const running = result.success && result.stdout.trim() === "200";
+  if (!config.devDomain) {
+    return { running: false, devDomain: undefined };
+  }
+  const configDirExists = existsSync2(config.traefikConfigDir);
   return {
-    running,
-    baseUrl: running ? `https://*.${config.devDomain}` : undefined,
+    running: configDirExists,
+    baseUrl: configDirExists ? `https://*.${config.devDomain}` : undefined,
     devDomain: config.devDomain
   };
 }
@@ -2272,24 +2274,25 @@ async function start(featureName, projectPath = ".", options = {}) {
 \uD83C\uDF10 Starting frontend dev server...`);
   const frontendPid = runBackground("bun", ["dev", "--port", String(ports.frontend), "--host", "0.0.0.0"], { cwd: webPath });
   console.log(`   Frontend PID: ${frontendPid}`);
-  let funnelPath = "";
-  let funnelUrl = "";
-  if (!options.noFunnel) {
+  let routePath = "";
+  let publicUrl = "";
+  if (!options.local) {
     const traefikStatus = getTraefikStatus();
     if (traefikStatus.running && traefikStatus.devDomain) {
-      funnelPath = worktreeName;
+      routePath = worktreeName;
       console.log(`
 \uD83D\uDD17 Setting up Traefik route...`);
       await new Promise((resolve4) => setTimeout(resolve4, 2000));
       if (traefikAddRoute(worktreeName, ports.frontend)) {
-        funnelUrl = `https://${worktreeName}.${traefikStatus.devDomain}`;
-        console.log(`   Public URL: ${funnelUrl}`);
+        publicUrl = `https://${worktreeName}.${traefikStatus.devDomain}`;
+        console.log(`   Public URL: ${publicUrl}`);
       } else {
         console.error(`   Failed to setup Traefik route`);
       }
     } else {
       console.log(`
-⚠️  Traefik not running, skipping public URL setup`);
+⚠️  Traefik not configured or devDomain not set, skipping public URL`);
+      console.log(`   Run: zdev config --set devDomain=dev.yourdomain.com`);
     }
   }
   const allocation = {
@@ -2299,7 +2302,7 @@ async function start(featureName, projectPath = ".", options = {}) {
     webDir,
     frontendPort: ports.frontend,
     convexPort: ports.convex,
-    funnelPath,
+    funnelPath: routePath,
     pids: {
       frontend: frontendPid,
       convex: convexPid
@@ -2314,8 +2317,8 @@ ${"─".repeat(50)}`);
 `);
   console.log(`\uD83D\uDCC1 Worktree: ${worktreePath}`);
   console.log(`\uD83C\uDF10 Local:    http://localhost:${ports.frontend}`);
-  if (funnelUrl) {
-    console.log(`\uD83D\uDD17 Funnel:   ${funnelUrl}`);
+  if (publicUrl) {
+    console.log(`\uD83D\uDD17 Public:   ${publicUrl}`);
   }
   console.log(`
 \uD83D\uDCDD Commands:`);
@@ -2712,10 +2715,10 @@ program2.name("zdev").description("\uD83D\uDC02 zdev - Multi-agent worktree deve
 program2.command("init [path]").description("Initialize zdev for a project").option("-s, --seed", "Create initial seed data from current Convex state").action(async (path, options) => {
   await init(path, options);
 });
-program2.command("start <feature>").description("Start working on a feature (creates worktree, starts servers)").option("-p, --project <path>", "Project path (default: current directory)", ".").option("--port <number>", "Frontend port (auto-allocated if not specified)", parseInt).option("--no-funnel", "Skip Tailscale Funnel setup").option("-s, --seed", "Import seed data into the new worktree").option("-b, --base-branch <branch>", "Base branch to create from", "origin/main").option("-w, --web-dir <dir>", "Subdirectory containing package.json (auto-detected if not specified)").action(async (feature, options) => {
+program2.command("start <feature>").description("Start working on a feature (creates worktree, starts servers)").option("-p, --project <path>", "Project path (default: current directory)", ".").option("--port <number>", "Frontend port (auto-allocated if not specified)", parseInt).option("--local", "Local only - skip public URL setup via Traefik").option("-s, --seed", "Import seed data into the new worktree").option("-b, --base-branch <branch>", "Base branch to create from", "origin/main").option("-w, --web-dir <dir>", "Subdirectory containing package.json (auto-detected if not specified)").action(async (feature, options) => {
   await start(feature, options.project, {
     port: options.port,
-    noFunnel: !options.funnel,
+    local: options.local,
     seed: options.seed,
     baseBranch: options.baseBranch,
     webDir: options.webDir
