@@ -2143,6 +2143,55 @@ export function ConvexClientProvider({ children }: { children: ReactNode }) {
   return <ConvexProvider client={convex}>{children}</ConvexProvider>;
 }
 `;
+var ROUTER = `import { createRouter } from '@tanstack/react-router'
+import { routeTree } from './routeTree.gen'
+
+export function getRouter() {
+  const router = createRouter({
+    routeTree,
+    defaultPreload: 'intent',
+    scrollRestoration: true,
+  })
+  return router
+}
+
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: ReturnType<typeof getRouter>
+  }
+}
+`;
+var ROOT_ROUTE = `/// <reference types="vite/client" />
+import {
+  HeadContent,
+  Scripts,
+  createRootRoute,
+} from '@tanstack/react-router'
+import * as React from 'react'
+
+export const Route = createRootRoute({
+  head: () => ({
+    meta: [
+      { charSet: 'utf-8' },
+      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+    ],
+  }),
+  component: RootDocument,
+})
+
+function RootDocument() {
+  return (
+    <html>
+      <head>
+        <HeadContent />
+      </head>
+      <body>
+        <Scripts />
+      </body>
+    </html>
+  )
+}
+`;
 var SETUP_SCRIPT = `#!/bin/bash
 # .zdev/setup.sh - Runs after worktree creation
 # Edit this to customize your setup (change package manager, add commands, etc.)
@@ -2208,18 +2257,37 @@ async function create(projectName, options = {}) {
     console.log(`   Created web/ subdirectory`);
   }
   console.log(`
-\uD83E\uDDF9 Cleaning up demo routes...`);
-  const routesDir = join2(webPath, "app", "routes");
+\uD83E\uDDF9 Cleaning up demo files...`);
+  const srcDir = join2(webPath, "src");
+  const routesDir = join2(srcDir, "routes");
   if (existsSync3(routesDir)) {
-    const routeFiles = readdirSync(routesDir);
-    for (const file of routeFiles) {
-      rmSync(join2(routesDir, file), { recursive: true, force: true });
-    }
-  } else {
+    rmSync(routesDir, { recursive: true, force: true });
     mkdirSync2(routesDir, { recursive: true });
   }
+  const componentsDir = join2(srcDir, "components");
+  const utilsDir = join2(srcDir, "utils");
+  const stylesDir = join2(srcDir, "styles");
+  if (existsSync3(componentsDir)) {
+    rmSync(componentsDir, { recursive: true, force: true });
+  }
+  if (existsSync3(utilsDir)) {
+    rmSync(utilsDir, { recursive: true, force: true });
+  }
+  if (existsSync3(stylesDir)) {
+    rmSync(stylesDir, { recursive: true, force: true });
+  }
+  const routeTreePath = join2(srcDir, "routeTree.gen.ts");
+  if (existsSync3(routeTreePath)) {
+    rmSync(routeTreePath);
+  }
+  const appDir = join2(webPath, "app");
+  if (existsSync3(appDir)) {
+    rmSync(appDir, { recursive: true, force: true });
+  }
+  writeFileSync3(join2(srcDir, "router.tsx"), ROUTER);
+  writeFileSync3(join2(routesDir, "__root.tsx"), ROOT_ROUTE);
   writeFileSync3(join2(routesDir, "index.tsx"), ZEBU_INDEX_PAGE);
-  console.log(`   Added clean index route`);
+  console.log(`   Cleaned demo files, added index route`);
   const pkgPath = join2(webPath, "package.json");
   if (existsSync3(pkgPath)) {
     const pkg = JSON.parse(readFileSync2(pkgPath, "utf-8"));
@@ -2241,9 +2309,9 @@ async function create(projectName, options = {}) {
     } else {
       console.log(`   Initialized Convex`);
     }
-    const componentsDir = join2(webPath, "app", "components");
-    mkdirSync2(componentsDir, { recursive: true });
-    writeFileSync3(join2(componentsDir, "ConvexClientProvider.tsx"), CONVEX_PROVIDER);
+    const componentsDir2 = join2(webPath, "app", "components");
+    mkdirSync2(componentsDir2, { recursive: true });
+    writeFileSync3(join2(componentsDir2, "ConvexClientProvider.tsx"), CONVEX_PROVIDER);
     console.log(`   Created ConvexClientProvider`);
     writeFileSync3(join2(webPath, ".env.local.example"), `VITE_CONVEX_URL=your_convex_url_here
 `);

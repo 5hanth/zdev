@@ -76,6 +76,57 @@ export function ConvexClientProvider({ children }: { children: ReactNode }) {
 }
 `;
 
+const ROUTER = `import { createRouter } from '@tanstack/react-router'
+import { routeTree } from './routeTree.gen'
+
+export function getRouter() {
+  const router = createRouter({
+    routeTree,
+    defaultPreload: 'intent',
+    scrollRestoration: true,
+  })
+  return router
+}
+
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: ReturnType<typeof getRouter>
+  }
+}
+`;
+
+const ROOT_ROUTE = `/// <reference types="vite/client" />
+import {
+  HeadContent,
+  Scripts,
+  createRootRoute,
+} from '@tanstack/react-router'
+import * as React from 'react'
+
+export const Route = createRootRoute({
+  head: () => ({
+    meta: [
+      { charSet: 'utf-8' },
+      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+    ],
+  }),
+  component: RootDocument,
+})
+
+function RootDocument() {
+  return (
+    <html>
+      <head>
+        <HeadContent />
+      </head>
+      <body>
+        <Scripts />
+      </body>
+    </html>
+  )
+}
+`;
+
 const SETUP_SCRIPT = `#!/bin/bash
 # .zdev/setup.sh - Runs after worktree creation
 # Edit this to customize your setup (change package manager, add commands, etc.)
@@ -162,23 +213,48 @@ export async function create(
     console.log(`   Created web/ subdirectory`);
   }
   
-  // Clean up demo routes and add Zebu index
-  console.log(`\n🧹 Cleaning up demo routes...`);
-  const routesDir = join(webPath, "app", "routes");
+  // Clean up demo routes, components, and utils
+  console.log(`\n🧹 Cleaning up demo files...`);
+  const srcDir = join(webPath, "src");
+  const routesDir = join(srcDir, "routes");
   
+  // Clean all routes
   if (existsSync(routesDir)) {
-    // Remove all existing routes
-    const routeFiles = readdirSync(routesDir);
-    for (const file of routeFiles) {
-      rmSync(join(routesDir, file), { recursive: true, force: true });
-    }
-  } else {
+    rmSync(routesDir, { recursive: true, force: true });
     mkdirSync(routesDir, { recursive: true });
   }
   
-  // Add Zebu-themed index route
+  // Remove demo components, utils, and styles
+  const componentsDir = join(srcDir, "components");
+  const utilsDir = join(srcDir, "utils");
+  const stylesDir = join(srcDir, "styles");
+  if (existsSync(componentsDir)) {
+    rmSync(componentsDir, { recursive: true, force: true });
+  }
+  if (existsSync(utilsDir)) {
+    rmSync(utilsDir, { recursive: true, force: true });
+  }
+  if (existsSync(stylesDir)) {
+    rmSync(stylesDir, { recursive: true, force: true });
+  }
+  
+  // Remove generated route tree (will be regenerated)
+  const routeTreePath = join(srcDir, "routeTree.gen.ts");
+  if (existsSync(routeTreePath)) {
+    rmSync(routeTreePath);
+  }
+  
+  // Remove app/ directory if it exists (we use src/)
+  const appDir = join(webPath, "app");
+  if (existsSync(appDir)) {
+    rmSync(appDir, { recursive: true, force: true });
+  }
+  
+  // Add clean router, root, and Zebu-themed index route
+  writeFileSync(join(srcDir, "router.tsx"), ROUTER);
+  writeFileSync(join(routesDir, "__root.tsx"), ROOT_ROUTE);
   writeFileSync(join(routesDir, "index.tsx"), ZEBU_INDEX_PAGE);
-  console.log(`   Added clean index route`);
+  console.log(`   Cleaned demo files, added index route`);
   
   // Update package.json name
   const pkgPath = join(webPath, "package.json");
