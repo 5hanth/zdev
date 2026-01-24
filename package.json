@@ -1,0 +1,35 @@
+{
+  "name": "zdev",
+  "version": "0.1.0",
+  "description": "Multi-agent worktree development environment for cloud dev with preview URLs",
+  "type": "module",
+  "bin": {
+    "zdev": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "bun build ./src/index.ts --outdir ./dist --target node",
+    "dev": "bun run ./src/index.ts",
+    "prepublishOnly": "bun run build"
+  },
+  "keywords": [
+    "clawdbot",
+    "convex",
+    "worktree",
+    "development",
+    "cli",
+    "multi-agent"
+  ],
+  "author": "Workstellar",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Workstellar-ApS/zdev"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "commander": "^12.0.0"
+  }
+}
