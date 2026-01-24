@@ -17,13 +17,15 @@
     "worktree",
     "development",
     "cli",
-    "multi-agent"
+    "multi-agent",
+    "tanstack",
+    "vite"
   ],
-  "author": "Workstellar",
-  "license": "MIT",
+  "author": "5hanth",
+  "license": "WTFPL",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Workstellar-ApS/zdev"
+    "url": "https://github.com/5hanth/zdev"
   },
   "devDependencies": {
     "@types/bun": "latest",
