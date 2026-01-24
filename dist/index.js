@@ -2087,7 +2087,7 @@ function Home() {
     <div
       style={{
         minHeight: '100vh',
-        background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+        background: 'linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%)',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -2095,25 +2095,45 @@ function Home() {
         fontFamily: 'system-ui, -apple-system, sans-serif',
         color: '#e8e8e8',
         padding: '2rem',
+        position: 'relative',
+        overflow: 'hidden',
       }}
     >
-      <div
-        style={{
-          fontSize: '6rem',
-          marginBottom: '1rem',
-        }}
-      >
+      {/* Glowing orbs */}
+      <div style={{
+        position: 'absolute',
+        top: '10%',
+        left: '15%',
+        width: '300px',
+        height: '300px',
+        background: 'radial-gradient(circle, rgba(99, 102, 241, 0.3) 0%, transparent 70%)',
+        borderRadius: '50%',
+        filter: 'blur(40px)',
+      }} />
+      <div style={{
+        position: 'absolute',
+        bottom: '20%',
+        right: '10%',
+        width: '400px',
+        height: '400px',
+        background: 'radial-gradient(circle, rgba(16, 185, 129, 0.25) 0%, transparent 70%)',
+        borderRadius: '50%',
+        filter: 'blur(50px)',
+      }} />
+      
+      <div style={{ fontSize: '7rem', marginBottom: '1.5rem', zIndex: 1 }}>
         \uD83D\uDC02
       </div>
       <h1
         style={{
-          fontSize: '3rem',
-          fontWeight: 700,
+          fontSize: '3.5rem',
+          fontWeight: 800,
           margin: 0,
-          background: 'linear-gradient(90deg, #00d9ff, #00ff88)',
+          background: 'linear-gradient(90deg, #818cf8, #34d399)',
           WebkitBackgroundClip: 'text',
           WebkitTextFillColor: 'transparent',
           backgroundClip: 'text',
+          zIndex: 1,
         }}
       >
         Ready to build
@@ -2121,14 +2141,23 @@ function Home() {
       <p
         style={{
           fontSize: '1.25rem',
-          color: '#888',
-          marginTop: '1rem',
+          color: 'rgba(255,255,255,0.6)',
+          marginTop: '1.5rem',
           textAlign: 'center',
+          zIndex: 1,
+          maxWidth: '500px',
+          lineHeight: 1.6,
         }}
       >
         Your TanStack Start app is ready.
         <br />
-        Edit <code style={{ color: '#00d9ff', background: '#1a1a2e', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>app/routes/index.tsx</code> to get started.
+        Edit <code style={{ 
+          color: '#818cf8', 
+          background: 'rgba(129, 140, 248, 0.1)', 
+          padding: '0.2rem 0.6rem', 
+          borderRadius: '6px',
+          border: '1px solid rgba(129, 140, 248, 0.2)',
+        }}>src/routes/index.tsx</code> to get started.
       </p>
     </div>
   )
@@ -2169,6 +2198,7 @@ import {
   createRootRoute,
 } from '@tanstack/react-router'
 import * as React from 'react'
+import { Agentation } from 'agentation'
 
 export const Route = createRootRoute({
   head: () => ({
@@ -2188,6 +2218,7 @@ function RootDocument() {
       </head>
       <body>
         <Outlet />
+        {import.meta.env.DEV && <Agentation />}
         <Scripts />
       </body>
     </html>
@@ -2294,6 +2325,8 @@ async function create(projectName, options = {}) {
   if (existsSync3(pkgPath)) {
     const pkg = JSON.parse(readFileSync2(pkgPath, "utf-8"));
     pkg.name = options.flat ? projectName : `${projectName}-web`;
+    pkg.dependencies = pkg.dependencies || {};
+    pkg.dependencies["agentation"] = "latest";
     writeFileSync3(pkgPath, JSON.stringify(pkg, null, 2));
   }
   if (options.convex) {
