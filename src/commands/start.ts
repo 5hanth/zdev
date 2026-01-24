@@ -205,12 +205,26 @@ export async function start(
       
       // Only patch if allowedHosts not already present
       if (!viteConfig.includes("allowedHosts")) {
-        // Find defineConfig({ and insert server config after it
-        if (viteConfig.includes("defineConfig({")) {
+        let patched = false;
+        
+        // Try to add allowedHosts to existing server block
+        if (viteConfig.includes("server:") || viteConfig.includes("server :")) {
+          // Add allowedHosts inside existing server block
+          viteConfig = viteConfig.replace(
+            /server\s*:\s*\{/,
+            "server: {\n    allowedHosts: true,"
+          );
+          patched = true;
+        } else if (viteConfig.includes("defineConfig({")) {
+          // No server block, add new one
           viteConfig = viteConfig.replace(
             /defineConfig\(\{/,
             "defineConfig({\n  server: {\n    allowedHosts: true,\n  },"
           );
+          patched = true;
+        }
+        
+        if (patched) {
           writeFileSync(viteConfigPath, viteConfig);
           console.log(`   Patched ${basename(viteConfigPath)} for external access`);
           

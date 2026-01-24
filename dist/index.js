@@ -2556,11 +2556,19 @@ async function start(featureName, projectPath = ".", options = {}) {
     try {
       let viteConfig = readFileSync4(viteConfigPath, "utf-8");
       if (!viteConfig.includes("allowedHosts")) {
-        if (viteConfig.includes("defineConfig({")) {
+        let patched = false;
+        if (viteConfig.includes("server:") || viteConfig.includes("server :")) {
+          viteConfig = viteConfig.replace(/server\s*:\s*\{/, `server: {
+    allowedHosts: true,`);
+          patched = true;
+        } else if (viteConfig.includes("defineConfig({")) {
           viteConfig = viteConfig.replace(/defineConfig\(\{/, `defineConfig({
   server: {
     allowedHosts: true,
   },`);
+          patched = true;
+        }
+        if (patched) {
           writeFileSync5(viteConfigPath, viteConfig);
           console.log(`   Patched ${basename3(viteConfigPath)} for external access`);
           run("git", ["update-index", "--skip-worktree", basename3(viteConfigPath)], { cwd: webPath });
