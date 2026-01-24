@@ -292,7 +292,7 @@ export async function start(
   saveConfig(config);
   
   // Summary
-  console.log(`\n${"─".repeat(50)}`);
+  console.log(`\n${"-".repeat(50)}`);
   console.log(`✅ Feature "${featureName}" is ready!\n`);
   console.log(`📁 Worktree: ${worktreePath}`);
   console.log(`🌐 Local:    http://localhost:${ports.frontend}`);
@@ -302,5 +302,5 @@ export async function start(
   console.log(`\n📝 Commands:`);
   console.log(`   cd ${worktreePath}`);
   console.log(`   zdev stop ${featureName} --project ${fullPath}`);
-  console.log(`${"─".repeat(50)}`);
+  console.log(`${"-".repeat(50)}`);
 }

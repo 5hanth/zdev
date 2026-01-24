@@ -365,7 +365,7 @@ export async function create(
   console.log(`   Git initialized`);
   
   // Summary
-  console.log(`\n${"─".repeat(50)}`);
+  console.log(`\n${"-".repeat(50)}`);
   console.log(`✅ Project "${projectName}" created!\n`);
   console.log(`📁 Location: ${targetPath}`);
   console.log(`\n📝 Next steps:`);
@@ -377,5 +377,5 @@ export async function create(
     console.log(`   bunx convex dev    # Setup Convex project`);
   }
   console.log(`   bun dev            # Start dev server`);
-  console.log(`${"─".repeat(50)}`);
+  console.log(`${"-".repeat(50)}`);
 }

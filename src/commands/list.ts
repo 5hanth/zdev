@@ -31,7 +31,7 @@ export async function list(options: ListOptions = {}): Promise<void> {
     console.log(`🔗 Traefik: not running`);
   }
   
-  console.log(`\n${"─".repeat(60)}`);
+  console.log(`\n${"-".repeat(60)}`);
   
   if (allocations.length === 0) {
     console.log(`\nNo active features.\n`);
@@ -71,7 +71,7 @@ export async function list(options: ListOptions = {}): Promise<void> {
     console.log();
   }
   
-  console.log(`${"─".repeat(60)}`);
+  console.log(`${"-".repeat(60)}`);
   console.log(`\nCommands:`);
   console.log(`   zdev stop <feature>    Stop servers for a feature`);
   console.log(`   zdev clean <feature>   Remove worktree after merge`);

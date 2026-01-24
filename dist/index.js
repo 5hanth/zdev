@@ -2379,7 +2379,7 @@ async function create(projectName, options = {}) {
   run("git", ["commit", "-m", "Initial commit from zdev create"], { cwd: targetPath });
   console.log(`   Git initialized`);
   console.log(`
-${"─".repeat(50)}`);
+${"-".repeat(50)}`);
   console.log(`✅ Project "${projectName}" created!
 `);
   console.log(`\uD83D\uDCC1 Location: ${targetPath}`);
@@ -2393,7 +2393,7 @@ ${"─".repeat(50)}`);
     console.log(`   bunx convex dev    # Setup Convex project`);
   }
   console.log(`   bun dev            # Start dev server`);
-  console.log(`${"─".repeat(50)}`);
+  console.log(`${"-".repeat(50)}`);
 }
 
 // src/commands/init.ts
@@ -2655,7 +2655,7 @@ async function start(featureName, projectPath = ".", options = {}) {
   config.allocations[worktreeName] = allocation;
   saveConfig(config);
   console.log(`
-${"─".repeat(50)}`);
+${"-".repeat(50)}`);
   console.log(`✅ Feature "${featureName}" is ready!
 `);
   console.log(`\uD83D\uDCC1 Worktree: ${worktreePath}`);
@@ -2667,7 +2667,7 @@ ${"─".repeat(50)}`);
 \uD83D\uDCDD Commands:`);
   console.log(`   cd ${worktreePath}`);
   console.log(`   zdev stop ${featureName} --project ${fullPath}`);
-  console.log(`${"─".repeat(50)}`);
+  console.log(`${"-".repeat(50)}`);
 }
 
 // src/commands/stop.ts
@@ -2763,7 +2763,7 @@ async function list(options = {}) {
     console.log(`\uD83D\uDD17 Traefik: not running`);
   }
   console.log(`
-${"─".repeat(60)}`);
+${"-".repeat(60)}`);
   if (allocations.length === 0) {
     console.log(`
 No active features.
@@ -2793,7 +2793,7 @@ No active features.
     console.log(`   Started:  ${new Date(alloc.started).toLocaleString()}`);
     console.log();
   }
-  console.log(`${"─".repeat(60)}`);
+  console.log(`${"-".repeat(60)}`);
   console.log(`
 Commands:`);
   console.log(`   zdev stop <feature>    Stop servers for a feature`);
