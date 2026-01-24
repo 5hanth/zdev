@@ -2362,7 +2362,7 @@ ${"─".repeat(50)}`);
 }
 
 // src/commands/init.ts
-import { existsSync as existsSync4, mkdirSync as mkdirSync3 } from "fs";
+import { existsSync as existsSync4, mkdirSync as mkdirSync3, writeFileSync as writeFileSync4, readFileSync as readFileSync3 } from "fs";
 import { resolve as resolve3 } from "path";
 async function init(projectPath = ".", options = {}) {
   const fullPath = resolve3(projectPath);
@@ -2387,13 +2387,13 @@ async function init(projectPath = ".", options = {}) {
     initialized: new Date().toISOString()
   };
   const configPath = resolve3(zdevDir, "project.json");
-  await Bun.write(configPath, JSON.stringify(projectConfig, null, 2));
+  writeFileSync4(configPath, JSON.stringify(projectConfig, null, 2));
   console.log(`   Created project config`);
   const gitignorePath = resolve3(fullPath, ".gitignore");
   if (existsSync4(gitignorePath)) {
-    const content = await Bun.file(gitignorePath).text();
+    const content = readFileSync3(gitignorePath, "utf-8");
     if (!content.includes(".zdev")) {
-      await Bun.write(gitignorePath, content + `
+      writeFileSync4(gitignorePath, content + `
 .zdev/
 `);
       console.log(`   Added .zdev/ to .gitignore`);
@@ -2426,7 +2426,7 @@ Next steps:`);
 }
 
 // src/commands/start.ts
-import { existsSync as existsSync5, readFileSync as readFileSync3, writeFileSync as writeFileSync4 } from "fs";
+import { existsSync as existsSync5, readFileSync as readFileSync4, writeFileSync as writeFileSync5 } from "fs";
 import { resolve as resolve4, basename as basename3, join as join3 } from "path";
 function detectWebDir(worktreePath) {
   const commonDirs = ["web", "frontend", "app", "client", "packages/web", "apps/web"];
@@ -2496,8 +2496,8 @@ async function start(featureName, projectPath = ".", options = {}) {
       const destPath = join3(webPath, pattern);
       if (existsSync5(srcPath) && !existsSync5(destPath)) {
         try {
-          const content = readFileSync3(srcPath);
-          writeFileSync4(destPath, content);
+          const content = readFileSync4(srcPath);
+          writeFileSync5(destPath, content);
           console.log(`   Copied ${pattern}`);
         } catch (e) {
           console.log(`   Could not copy ${pattern}`);
@@ -2554,14 +2554,14 @@ async function start(featureName, projectPath = ".", options = {}) {
   const viteConfigPath = existsSync5(viteConfigTsPath) ? viteConfigTsPath : existsSync5(viteConfigJsPath) ? viteConfigJsPath : null;
   if (viteConfigPath) {
     try {
-      let viteConfig = readFileSync3(viteConfigPath, "utf-8");
+      let viteConfig = readFileSync4(viteConfigPath, "utf-8");
       if (!viteConfig.includes("allowedHosts")) {
         if (viteConfig.includes("defineConfig({")) {
           viteConfig = viteConfig.replace(/defineConfig\(\{/, `defineConfig({
   server: {
     allowedHosts: true,
   },`);
-          writeFileSync4(viteConfigPath, viteConfig);
+          writeFileSync5(viteConfigPath, viteConfig);
           console.log(`   Patched ${basename3(viteConfigPath)} for external access`);
           run("git", ["update-index", "--skip-worktree", basename3(viteConfigPath)], { cwd: webPath });
         }

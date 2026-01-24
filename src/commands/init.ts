@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from "fs";
+import { existsSync, mkdirSync, writeFileSync, readFileSync } from "fs";
 import { resolve, basename } from "path";
 import { isGitRepo, getRepoName, run } from "../utils.js";
 import { getSeedPath, SEEDS_DIR } from "../config.js";
@@ -38,15 +38,15 @@ export async function init(projectPath: string = ".", options: InitOptions = {})
   };
   
   const configPath = resolve(zdevDir, "project.json");
-  await Bun.write(configPath, JSON.stringify(projectConfig, null, 2));
+  writeFileSync(configPath, JSON.stringify(projectConfig, null, 2));
   console.log(`   Created project config`);
   
   // Check for existing .gitignore and add .zdev if needed
   const gitignorePath = resolve(fullPath, ".gitignore");
   if (existsSync(gitignorePath)) {
-    const content = await Bun.file(gitignorePath).text();
+    const content = readFileSync(gitignorePath, "utf-8");
     if (!content.includes(".zdev")) {
-      await Bun.write(gitignorePath, content + "\n.zdev/\n");
+      writeFileSync(gitignorePath, content + "\n.zdev/\n");
       console.log(`   Added .zdev/ to .gitignore`);
     }
   }
