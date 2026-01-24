@@ -29,6 +29,25 @@ bunx zdev
 bun add -g zdev
 ```
 
+## Using with AI Agents
+
+### Claude Code / Clawdbot
+
+Add the zdev skill to teach your agent the workflow:
+
+```bash
+npx add-skill 5hanth/zdev-skill
+```
+
+Then prompt your agent:
+```
+Use zdev to create a new project called my-app and start a feature branch for authentication.
+```
+
+### Manual Setup
+
+If your agent doesn't support skills, copy the [SKILL.md](https://github.com/5hanth/zdev-skill/blob/main/SKILL.md) contents into your agent's context or system prompt.
+
 ## Prerequisites
 
 ### Required
