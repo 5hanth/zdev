@@ -1,204 +1,143 @@
-# Zebu Development SOP
+# zdev SOP
 
-Standard Operating Procedure for multi-agent parallel feature development.
+Standard Operating Procedure for `zdev` - Multi-agent worktree development.
 
-## First-Time Setup (once per machine)
+## Overview
+
+zdev manages isolated development environments for Convex + Vite projects:
+- Each feature gets its own git worktree
+- Separate port allocations (no conflicts)
+- Optional public preview URLs via Traefik
+- Automatic config file copying (.env.local, etc.)
+
+## Requirements
+
+- **Convex** backend (uses `convex dev`, `convex export/import`)
+- **Vite-based** frontend (TanStack Start, plain Vite, etc.)
+- **Bun** runtime
+- **Git** repository
+
+## Commands Reference
+
+### Initialize Project
+```bash
+zdev init [path]
+  -s, --seed    Create initial seed snapshot
+```
+
+### Start Feature
+```bash
+zdev start <feature> [options]
+  -p, --project <path>      Project path (default: .)
+  --port <number>           Specific frontend port
+  --local                   Skip public URL setup
+  -s, --seed                Import seed data
+  -b, --base-branch <ref>   Base branch (default: origin/main)
+  -w, --web-dir <dir>       Web subdirectory (auto-detected)
+```
+
+### Stop Feature
+```bash
+zdev stop <feature> [options]
+  -p, --project <path>      Project path
+  -k, --keep                Keep worktree, just stop servers
+```
+
+### List Features
+```bash
+zdev list
+  --json    Output as JSON
+```
+
+### Clean Feature
+```bash
+zdev clean <feature> [options]
+  -p, --project <path>      Project path
+  -f, --force               Force remove
+```
+
+### Seed Data
+```bash
+zdev seed export [path]     Export current Convex state
+zdev seed import [path]     Import seed into current worktree
+```
+
+### Configuration
+```bash
+zdev config [options]
+  -l, --list               Show current config
+  -s, --set <key=value>    Set config value
+  -a, --add <pattern>      Add file pattern to copy
+  -r, --remove <pattern>   Remove file pattern
+```
+
+## Config Options
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `devDomain` | (empty) | Domain for preview URLs |
+| `dockerHostIp` | `172.17.0.1` | Docker host IP for Traefik |
+| `traefikConfigDir` | `/infra/traefik/dynamic` | Traefik file provider path |
+| `copyPatterns` | `.env.local`, etc. | Files to auto-copy |
+
+## Typical Workflow
 
 ```bash
-# 1. Install Bun
-curl -fsSL https://bun.sh/install | bash
+# 1. Setup project (one-time)
+cd my-convex-project
+zdev init --seed
 
-# 2. Login to Convex
-bunx convex login
+# 2. Start feature
+zdev start add-auth -p .
+
+# 3. Work on feature
+cd ~/.zdev/worktrees/project-add-auth
+# ... make changes, commit, push ...
+
+# 4. Stop when done for the day
+zdev stop add-auth -p /path/to/project
+
+# 5. Clean up after PR merged
+zdev clean add-auth -p /path/to/project
 ```
 
-## Vite Project Configuration
+## Multi-Agent Usage
 
-For public URLs to work, your Vite projects need `allowedHosts: true`:
-
-```typescript
-// vite.config.ts
-export default defineConfig({
-  server: {
-    allowedHosts: true,  // Required for Traefik reverse proxy
-  },
-  // ... plugins, etc.
-})
-```
-
-**Why?** Vite blocks requests from unknown hosts by default. When accessing via `https://feature.dev.yourdomain.com`, Vite sees a different host than `localhost` and blocks it.
-
-Zebu attempts to auto-patch this, but adding it to your project template ensures it works out of the box.
-
-## Stack
-- **Runtime:** Bun
-- **Framework:** TanStack + Effect
-- **Backend:** Convex
-- **Package Manager:** bun
-
-## Quick Start
+Multiple agents can work simultaneously:
 
 ```bash
-# Install zebu globally (or use bunx zebu)
-bun add -g zebu
+# Agent A
+zdev start feature-auth -p ./project
+# Gets port 5173, https://project-feature-auth.dev.example.com
 
-# Initialize a project
-cd your-project
-zebu init
+# Agent B  
+zdev start feature-billing -p ./project
+# Gets port 5174, https://project-feature-billing.dev.example.com
 
-# Start a feature
-zebu start my-feature -p ./your-project
-
-# List active features
-zebu list
-
-# Stop a feature
-zebu stop my-feature
-
-# Clean up after PR merge
-zebu clean my-feature
-```
-
-## Directory Structure
-
-```
-~/.zebu/
-├── config.json              # Global config (ports, allocations)
-├── seeds/
-│   └── {project}.zip        # Seed data per project
-└── worktrees/
-    └── {project}-{feature}/ # Feature worktrees
-
-{project}/
-└── .zebu/
-    └── project.json         # Project-specific config
-```
-
-## Workflow
-
-### 1. Initialize Project (once per project)
-
-```bash
-cd /path/to/your-project
-zebu init
-zebu init --seed  # Also export current data as seed
-```
-
-### 2. Start Feature Work
-
-```bash
-zebu start feature-name -p /path/to/project
-
-# Options:
-#   --seed         Import seed data into worktree
-#   --no-funnel    Skip Tailscale Funnel setup
-#   --port 5173    Use specific port
-#   --web-dir web  Specify subdirectory with package.json
-```
-
-This will:
-1. Create worktree at `~/.zebu/worktrees/{project}-{feature}/`
-2. Run `bun install` (auto-detects web/, frontend/, etc.)
-3. Start `bunx convex dev` (background)
-4. Start `bun dev --port XXXX` (background)
-5. Setup Tailscale Funnel (unless --no-funnel)
-
-### 3. Access Your Feature
-
-- **Local:** http://localhost:{port}
-- **Funnel:** https://{machine}.ts.net/{project}-{feature}
-
-### 4. Stop Feature (keep worktree)
-
-```bash
-zebu stop feature-name
-zebu stop feature-name --keep  # Keep worktree, just stop servers
-```
-
-### 5. Clean Up (after PR merge)
-
-```bash
-zebu clean feature-name
-zebu clean feature-name --force  # Force remove even if dirty
-```
-
-## Seed Data Management
-
-```bash
-# Export current Convex data as seed
-zebu seed export -p /path/to/project
-
-# Import seed into worktree
-cd ~/.zebu/worktrees/project-feature
-zebu seed import
-```
-
-Seeds are stored at `~/.zebu/seeds/{project}.zip`
-
-## Port Allocation
-
-Zebu auto-allocates ports:
-- Frontend: 5173, 5174, 5175, ...
-- Convex: 3210, 3211, 3212, ...
-
-## Multi-Agent Coordination
-
-### Before Starting Work
-
-1. Run `zebu list` to see active features
-2. Avoid working on same files as another agent
-3. If ports conflict, specify with `--port`
-
-### Naming Conventions
-
-- Worktree: `{project}-{feature}`
-- Branch: `feature/{feature}`
-
-### Project Detection
-
-Zebu auto-detects web directories in this order:
-1. `web/`
-2. `frontend/`
-3. `app/`
-4. `client/`
-5. `packages/web/`
-6. `apps/web/`
-7. Root `package.json`
-
-Override with `--web-dir`.
-
-## Tailscale Funnel
-
-Funnel URLs are public — anyone with the link can access.
-Funnel does NOT count against your Tailscale user/device quota.
-
-```bash
-# Skip funnel for local-only dev
-zebu start feature --no-funnel
+# Check status
+zdev list
 ```
 
 ## Troubleshooting
 
-### Convex auth issues
+### Port conflict
 ```bash
-bunx convex login
+zdev config --list  # Check nextFrontendPort
+# Manually specify port:
+zdev start feature --port 5200
 ```
 
-### Port in use
+### Worktree already exists
 ```bash
-zebu start feature --port 5200
+zdev clean feature -p ./project --force
 ```
 
-### Worktree stuck
+### No public URL
 ```bash
-zebu clean feature --force
+# Check config
+zdev config --list
+
+# Set domain
+zdev config --set devDomain=dev.example.com
+zdev config --set traefikConfigDir=/etc/traefik/dynamic
 ```
-
-### Check process status
-```bash
-zebu list --json
-```
-
----
-
-*Last updated: 2026-01-24*

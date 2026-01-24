@@ -46,7 +46,7 @@ const DEFAULT_CONFIG: zdevConfig = {
     ".env.development.local",
   ],
   dockerHostIp: "172.17.0.1",
-  devDomain: "dev.web3citadel.com",
+  devDomain: "",
   traefikConfigDir: "/infra/traefik/dynamic",
   allocations: {},
 };

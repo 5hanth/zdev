@@ -30,14 +30,14 @@ program
   .description("Start working on a feature (creates worktree, starts servers)")
   .option("-p, --project <path>", "Project path (default: current directory)", ".")
   .option("--port <number>", "Frontend port (auto-allocated if not specified)", parseInt)
-  .option("--no-funnel", "Skip Tailscale Funnel setup")
+  .option("--local", "Local only - skip public URL setup via Traefik")
   .option("-s, --seed", "Import seed data into the new worktree")
   .option("-b, --base-branch <branch>", "Base branch to create from", "origin/main")
   .option("-w, --web-dir <dir>", "Subdirectory containing package.json (auto-detected if not specified)")
   .action(async (feature, options) => {
     await start(feature, options.project, {
       port: options.port,
-      noFunnel: !options.funnel,
+      local: options.local,
       seed: options.seed,
       baseBranch: options.baseBranch,
       webDir: options.webDir,

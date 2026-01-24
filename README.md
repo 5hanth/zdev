@@ -1,8 +1,10 @@
 # 🐂 zdev
 
-Multi-agent worktree development environment for cloud dev with preview URLs.
+Multi-agent worktree development environment for **Convex + Vite/TanStack** projects.
 
 Built for [Clawdbot](https://docs.clawd.bot) users who want to run multiple AI coding agents on different features simultaneously.
+
+> ⚠️ **Currently requires:** Convex backend + Vite-based frontend (TanStack Start, plain Vite, etc.)
 
 ## Features
 
@@ -11,7 +13,8 @@ Built for [Clawdbot](https://docs.clawd.bot) users who want to run multiple AI c
 - **Preview URLs** — Public HTTPS URLs via Traefik (optional)
 - **Config Auto-Copy** — `.env.local` and other files copied automatically
 - **Vite Support** — Auto-patches `allowedHosts` for external access
-- **Multi-Agent Ready** — Multiple agents can work on different features
+- **Convex Integration** — Runs `convex dev` per worktree with isolated state
+- **Seed Data** — Export/import database state between worktrees
 
 ## Installation
 
@@ -27,10 +30,11 @@ bun add -g zdev
 
 ### Required
 - [Bun](https://bun.sh) — `curl -fsSL https://bun.sh/install | bash`
-- [Convex](https://convex.dev) — `bunx convex login`
+- [Convex](https://convex.dev) account — `bunx convex login`
+- Git repository with Convex + Vite project
 
-### Optional (for preview URLs)
-- [Traefik](https://traefik.io) with file provider
+### Optional (for public preview URLs)
+- [Traefik](https://traefik.io) reverse proxy with file provider
 - DNS wildcard record (`*.dev.yourdomain.com`)
 
 See [Traefik Setup](#traefik-setup-for-preview-urls) below.
@@ -39,163 +43,183 @@ See [Traefik Setup](#traefik-setup-for-preview-urls) below.
 
 ```bash
 # 1. Initialize your project
-cd your-project
+cd your-convex-project
 zdev init
 
-# 2. Setup Convex (once per project)
+# 2. Setup Convex (once per project, if not already done)
 cd web  # or wherever package.json is
 bunx convex dev  # select project, then Ctrl+C
 
 # 3. Start a feature
 zdev start my-feature -p /path/to/project
 
-# 4. Access your feature
-# Local: http://localhost:5173
-# Public: https://project-my-feature.dev.yourdomain.com (if Traefik configured)
+# 4. Work on it
+cd ~/.zdev/worktrees/project-my-feature
+
+# 5. Stop when done
+zdev stop my-feature -p /path/to/project
 ```
 
 ## Commands
 
+### `zdev init [path]`
+Initialize zdev for a project. Creates seed data from current Convex state.
+
+```bash
+zdev init                    # Current directory
+zdev init ./my-project       # Specific path
+zdev init -s                 # Also create seed snapshot
+```
+
 ### `zdev start <feature>`
-Create worktree and start dev servers.
+Start working on a feature. Creates worktree, installs deps, starts servers.
 
 ```bash
 zdev start auth -p ./my-project
-zdev start auth -p ./my-project --no-funnel  # skip Traefik
-zdev start auth -p ./my-project --port 3000  # specific port
+zdev start auth -p ./my-project --local      # Skip public URL
+zdev start auth -p ./my-project --port 3000  # Specific port
+zdev start auth -p ./my-project --seed       # Import seed data
+zdev start auth --base-branch origin/develop # Different base
+```
+
+### `zdev stop <feature>`
+Stop servers for a feature.
+
+```bash
+zdev stop auth -p ./my-project
+zdev stop auth --keep        # Keep worktree, just stop servers
 ```
 
 ### `zdev list`
-Show active features and status.
+List all active features and their status.
 
-### `zdev stop <feature>`
-Stop dev servers (keeps worktree).
+```bash
+zdev list
+zdev list --json
+```
 
 ### `zdev clean <feature>`
-Remove worktree completely (after PR merged).
+Remove a feature worktree completely (use after PR merged).
+
+```bash
+zdev clean auth -p ./my-project
+zdev clean auth --force      # Force even if git fails
+```
+
+### `zdev seed export/import`
+Manage database seed data.
+
+```bash
+zdev seed export             # Export current Convex state
+zdev seed import             # Import into current worktree
+```
 
 ### `zdev config`
 View and manage configuration.
 
 ```bash
-zdev config                              # view all
+zdev config --list
 zdev config --set devDomain=dev.example.com
-zdev config --set dockerHostIp=172.17.0.1
-zdev config --add ".env.production"      # add copy pattern
-zdev config --remove ".env.development"  # remove pattern
+zdev config --set traefikConfigDir=/etc/traefik/dynamic
+zdev config --add .env.production
+zdev config --remove .env.production
 ```
 
 ## Configuration
 
-zdev stores config in `~/.zdev/config.json`:
+Config stored at `~/.zdev/config.json`:
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `devDomain` | `dev.web3citadel.com` | Domain for preview URLs |
-| `dockerHostIp` | `172.17.0.1` | How Traefik reaches host services |
-| `traefikConfigDir` | `/infra/traefik/dynamic` | Traefik dynamic config path |
-| `copyPatterns` | `[".env.local", ...]` | Files auto-copied to worktrees |
+| Key | Default | Description |
+|-----|---------|-------------|
+| `devDomain` | (empty) | Domain for preview URLs (e.g., `dev.example.com`) |
+| `dockerHostIp` | `172.17.0.1` | How Traefik (in Docker) reaches host services |
+| `traefikConfigDir` | `/infra/traefik/dynamic` | Path to Traefik's file provider directory |
+| `copyPatterns` | `.env.local`, etc. | Files to auto-copy to worktrees |
+
+## Traefik Setup for Preview URLs
+
+To get public HTTPS URLs for each feature:
+
+### 1. DNS Wildcard
+Add a wildcard A record pointing to your server:
+```
+*.dev.example.com → your-server-ip
+```
+
+### 2. Traefik with File Provider
+Configure Traefik to watch a dynamic config directory:
+
+```yaml
+# traefik.yml
+providers:
+  file:
+    directory: /etc/traefik/dynamic  # zdev writes route files here
+    watch: true
+
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: you@example.com
+      storage: /etc/traefik/acme.json
+      httpChallenge:
+        entryPoint: web
+```
+
+### 3. Configure zdev
+```bash
+zdev config --set devDomain=dev.example.com
+zdev config --set traefikConfigDir=/etc/traefik/dynamic
+zdev config --set dockerHostIp=172.17.0.1  # or host.docker.internal on Mac
+```
+
+### How It Works
+When you run `zdev start my-feature`, it creates a file like `/etc/traefik/dynamic/project-my-feature.yml`:
+
+```yaml
+http:
+  routers:
+    project-my-feature:
+      rule: "Host(`project-my-feature.dev.example.com`)"
+      service: project-my-feature
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+
+  services:
+    project-my-feature:
+      loadBalancer:
+        servers:
+          - url: "http://172.17.0.1:5173"  # Host port from Docker's perspective
+```
+
+Traefik watches the directory and automatically picks up the new route.
+
+## Multi-Agent Workflow
+
+1. **Agent A** works on auth: `zdev start auth -p ./project`
+2. **Agent B** works on billing: `zdev start billing -p ./project`
+3. Each gets isolated worktree + ports + preview URL
+4. No conflicts, parallel development
 
 ## Directory Structure
 
 ```
 ~/.zdev/
-├── config.json           # Global configuration
-├── seeds/                # Project seed data (optional)
-└── worktrees/
-    ├── myapp-feature-a/  # Feature worktree
-    └── myapp-feature-b/  # Another feature
+├── config.json           # Global config
+├── worktrees/            # All worktrees live here
+│   ├── project-auth/
+│   └── project-billing/
+└── seeds/                # Seed data snapshots
+    └── project.zip
 ```
-
-## Local-Only Mode
-
-Don't have Traefik? zdev works fine with just localhost:
-
-```bash
-zdev start my-feature -p ./project --no-funnel
-# Access at http://localhost:PORT
-```
-
-## Traefik Setup (for Preview URLs)
-
-If you want public preview URLs like `https://feature.dev.yourdomain.com`:
-
-### 1. Add file provider to Traefik
-
-```bash
-# Traefik command flags
---providers.file.directory=/path/to/dynamic
---providers.file.watch=true
-
-# Volume mount
--v /path/to/dynamic:/etc/traefik/dynamic:ro
-```
-
-### 2. Setup DNS
-
-Add wildcard A record:
-```
-*.dev.yourdomain.com → your-server-ip
-```
-
-### 3. Configure zdev
-
-```bash
-zdev config --set devDomain=dev.yourdomain.com
-zdev config --set traefikConfigDir=/path/to/dynamic
-```
-
-### Docker Host IP
-
-zdev needs to tell Traefik how to reach your dev servers. Default is `172.17.0.1` (Docker's bridge gateway).
-
-Check your setup:
-```bash
-# Standard Docker
-ip -4 addr show docker0 | grep inet
-
-# Custom network
-docker network inspect your-network | grep Gateway
-```
-
-Update if needed:
-```bash
-zdev config --set dockerHostIp=172.19.0.1
-```
-
-## For Clawdbot Users
-
-zdev is designed for [Clawdbot](https://docs.clawd.bot) cloud dev environments.
-
-**Recommended setup:**
-1. Follow [Clawdbot docs](https://docs.clawd.bot) to setup your gateway
-2. Install Traefik with file provider (see above)
-3. Configure DNS wildcard for your domain
-4. Use zdev to manage multi-agent development
-
-Each agent can work on a different feature with isolated worktrees and preview URLs.
-
-## Vite Projects
-
-zdev auto-patches `vite.config.ts` to add:
-```typescript
-server: {
-  allowedHosts: true,
-}
-```
-
-This is required for Traefik reverse proxy to work. The change is marked with `git update-index --skip-worktree` so it won't be committed.
-
-## Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| "Blocked host" in browser | Check vite.config has `allowedHosts: true` |
-| 502 Bad Gateway | Check frontend is running: `zdev list` |
-| Convex errors | Run `bunx convex dev` in worktree |
-| Port conflicts | Use `--port` flag |
-| Can't reach from Traefik | Check `dockerHostIp` config |
 
 ## License
 
-MIT
+[WTFPL](LICENSE)

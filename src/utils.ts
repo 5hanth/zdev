@@ -159,14 +159,18 @@ export function traefikRemoveRoute(name: string): boolean {
 
 export function getTraefikStatus(): { baseUrl?: string; running: boolean; devDomain?: string } {
   const config = loadConfig();
-  // Check if Traefik is responding
-  const result = run("curl", ["-s", "-o", "/dev/null", "-w", "%{http_code}", "http://localhost:8080/api/overview"]);
   
-  const running = result.success && result.stdout.trim() === "200";
+  // If devDomain not configured, can't do public URLs
+  if (!config.devDomain) {
+    return { running: false, devDomain: undefined };
+  }
+  
+  // Check if Traefik config dir exists (don't need API - just file provider)
+  const configDirExists = existsSync(config.traefikConfigDir);
   
   return {
-    running,
-    baseUrl: running ? `https://*.${config.devDomain}` : undefined,
+    running: configDirExists,
+    baseUrl: configDirExists ? `https://*.${config.devDomain}` : undefined,
     devDomain: config.devDomain,
   };
 }

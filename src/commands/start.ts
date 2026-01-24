@@ -21,7 +21,7 @@ import {
 
 export interface StartOptions {
   port?: number;
-  noFunnel?: boolean;
+  local?: boolean;  // Skip public URL setup
   seed?: boolean;
   baseBranch?: string;
   webDir?: string;  // Subdirectory containing package.json (e.g., "web")
@@ -222,28 +222,29 @@ export async function start(
   );
   console.log(`   Frontend PID: ${frontendPid}`);
   
-  // Setup Traefik route
-  let funnelPath = "";
-  let funnelUrl = "";
+  // Setup Traefik route for public URL
+  let routePath = "";
+  let publicUrl = "";
   
-  if (!options.noFunnel) {
+  if (!options.local) {
     const traefikStatus = getTraefikStatus();
     
     if (traefikStatus.running && traefikStatus.devDomain) {
-      funnelPath = worktreeName;
+      routePath = worktreeName;
       console.log(`\n🔗 Setting up Traefik route...`);
       
       // Wait for frontend to be ready
       await new Promise((resolve) => setTimeout(resolve, 2000));
       
       if (traefikAddRoute(worktreeName, ports.frontend)) {
-        funnelUrl = `https://${worktreeName}.${traefikStatus.devDomain}`;
-        console.log(`   Public URL: ${funnelUrl}`);
+        publicUrl = `https://${worktreeName}.${traefikStatus.devDomain}`;
+        console.log(`   Public URL: ${publicUrl}`);
       } else {
         console.error(`   Failed to setup Traefik route`);
       }
     } else {
-      console.log(`\n⚠️  Traefik not running, skipping public URL setup`);
+      console.log(`\n⚠️  Traefik not configured or devDomain not set, skipping public URL`);
+      console.log(`   Run: zdev config --set devDomain=dev.yourdomain.com`);
     }
   }
   
@@ -255,7 +256,7 @@ export async function start(
     webDir,
     frontendPort: ports.frontend,
     convexPort: ports.convex,
-    funnelPath,
+    funnelPath: routePath,
     pids: {
       frontend: frontendPid,
       convex: convexPid,
@@ -271,8 +272,8 @@ export async function start(
   console.log(`✅ Feature "${featureName}" is ready!\n`);
   console.log(`📁 Worktree: ${worktreePath}`);
   console.log(`🌐 Local:    http://localhost:${ports.frontend}`);
-  if (funnelUrl) {
-    console.log(`🔗 Funnel:   ${funnelUrl}`);
+  if (publicUrl) {
+    console.log(`🔗 Public:   ${publicUrl}`);
   }
   console.log(`\n📝 Commands:`);
   console.log(`   cd ${worktreePath}`);
