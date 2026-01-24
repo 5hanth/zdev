@@ -72,7 +72,24 @@ export async function start(
   const worktreeName = `${repoName}-${featureName}`;
   const worktreePath = getWorktreePath(worktreeName);
   const branchName = `feature/${featureName}`;
-  const baseBranch = options.baseBranch || "origin/main";
+  
+  // Auto-detect base branch if not specified
+  let baseBranch = options.baseBranch;
+  if (!baseBranch) {
+    // Try common base branches in order
+    const candidates = ["origin/main", "origin/master", "main", "master"];
+    for (const candidate of candidates) {
+      const check = run("git", ["rev-parse", "--verify", candidate], { cwd: fullPath });
+      if (check.success) {
+        baseBranch = candidate;
+        break;
+      }
+    }
+    if (!baseBranch) {
+      console.error(`❌ Could not detect base branch. Use --base-branch to specify.`);
+      process.exit(1);
+    }
+  }
   
   console.log(`🐂 Starting feature: ${featureName}`);
   console.log(`   Project: ${repoName}`);
