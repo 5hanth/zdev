@@ -148,9 +148,12 @@ export async function start(
     }
   }
   
-  // Import seed data if requested and exists
+  // Check if this is a Convex project
+  const hasConvex = existsSync(join(webPath, "convex")) || existsSync(join(worktreePath, "convex"));
+  
+  // Import seed data if requested, exists, and is a Convex project
   const seedPath = getSeedPath(repoName);
-  if (options.seed && existsSync(seedPath)) {
+  if (options.seed && hasConvex && existsSync(seedPath)) {
     console.log(`\n🌱 Importing seed data...`);
     const seedResult = run("bunx", ["convex", "import", seedPath], {
       cwd: webPath,
@@ -164,24 +167,29 @@ export async function start(
   
   // Allocate ports
   const ports = options.port
-    ? { frontend: options.port, convex: options.port + 100 }
-    : allocatePorts(config);
+    ? { frontend: options.port, convex: hasConvex ? options.port + 100 : 0 }
+    : allocatePorts(config, hasConvex);
   
   console.log(`\n🔌 Allocated ports:`);
   console.log(`   Frontend: ${ports.frontend}`);
-  console.log(`   Convex: ${ports.convex}`);
+  if (hasConvex) {
+    console.log(`   Convex: ${ports.convex}`);
+  }
   
-  // Start Convex dev
-  console.log(`\n🚀 Starting Convex dev server...`);
-  const convexPid = runBackground(
-    "bunx",
-    ["convex", "dev", "--tail-logs", "disable"],
-    { cwd: webPath }
-  );
-  console.log(`   Convex PID: ${convexPid}`);
-  
-  // Wait a moment for Convex to start
-  await new Promise((resolve) => setTimeout(resolve, 2000));
+  // Start Convex dev (only if this is a Convex project)
+  let convexPid: number | undefined;
+  if (hasConvex) {
+    console.log(`\n🚀 Starting Convex dev server...`);
+    convexPid = runBackground(
+      "bunx",
+      ["convex", "dev", "--tail-logs", "disable"],
+      { cwd: webPath }
+    );
+    console.log(`   Convex PID: ${convexPid}`);
+    
+    // Wait a moment for Convex to start
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
   
   // Patch vite.config to allow external hosts (for Traefik access)
   const viteConfigTsPath = join(webPath, "vite.config.ts");

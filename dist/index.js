@@ -1933,11 +1933,14 @@ function saveConfig(config) {
   ensurezdevDirs();
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
 }
-function allocatePorts(config) {
+function allocatePorts(config, includeConvex = true) {
   const frontend = config.nextFrontendPort;
-  const convex = config.nextConvexPort;
   config.nextFrontendPort = frontend + 1;
-  config.nextConvexPort = convex + 1;
+  let convex = 0;
+  if (includeConvex) {
+    convex = config.nextConvexPort;
+    config.nextConvexPort = convex + 1;
+  }
   return { frontend, convex };
 }
 function getWorktreePath(name) {
@@ -2226,8 +2229,9 @@ async function start(featureName, projectPath = ".", options = {}) {
       console.log(`   Dependencies installed`);
     }
   }
+  const hasConvex = existsSync4(join2(webPath, "convex")) || existsSync4(join2(worktreePath, "convex"));
   const seedPath = getSeedPath(repoName);
-  if (options.seed && existsSync4(seedPath)) {
+  if (options.seed && hasConvex && existsSync4(seedPath)) {
     console.log(`
 \uD83C\uDF31 Importing seed data...`);
     const seedResult = run("bunx", ["convex", "import", seedPath], {
@@ -2239,16 +2243,21 @@ async function start(featureName, projectPath = ".", options = {}) {
       console.error(`   Failed to import seed: ${seedResult.stderr}`);
     }
   }
-  const ports = options.port ? { frontend: options.port, convex: options.port + 100 } : allocatePorts(config);
+  const ports = options.port ? { frontend: options.port, convex: hasConvex ? options.port + 100 : 0 } : allocatePorts(config, hasConvex);
   console.log(`
 \uD83D\uDD0C Allocated ports:`);
   console.log(`   Frontend: ${ports.frontend}`);
-  console.log(`   Convex: ${ports.convex}`);
-  console.log(`
+  if (hasConvex) {
+    console.log(`   Convex: ${ports.convex}`);
+  }
+  let convexPid;
+  if (hasConvex) {
+    console.log(`
 \uD83D\uDE80 Starting Convex dev server...`);
-  const convexPid = runBackground("bunx", ["convex", "dev", "--tail-logs", "disable"], { cwd: webPath });
-  console.log(`   Convex PID: ${convexPid}`);
-  await new Promise((resolve4) => setTimeout(resolve4, 2000));
+    convexPid = runBackground("bunx", ["convex", "dev", "--tail-logs", "disable"], { cwd: webPath });
+    console.log(`   Convex PID: ${convexPid}`);
+    await new Promise((resolve4) => setTimeout(resolve4, 2000));
+  }
   const viteConfigTsPath = join2(webPath, "vite.config.ts");
   const viteConfigJsPath = join2(webPath, "vite.config.js");
   const viteConfigPath = existsSync4(viteConfigTsPath) ? viteConfigTsPath : existsSync4(viteConfigJsPath) ? viteConfigJsPath : null;

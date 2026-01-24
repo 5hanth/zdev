@@ -84,12 +84,15 @@ export function saveConfig(config: zdevConfig): void {
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
 }
 
-export function allocatePorts(config: zdevConfig): { frontend: number; convex: number } {
+export function allocatePorts(config: zdevConfig, includeConvex: boolean = true): { frontend: number; convex: number } {
   const frontend = config.nextFrontendPort;
-  const convex = config.nextConvexPort;
-  
   config.nextFrontendPort = frontend + 1;
-  config.nextConvexPort = convex + 1;
+  
+  let convex = 0;
+  if (includeConvex) {
+    convex = config.nextConvexPort;
+    config.nextConvexPort = convex + 1;
+  }
   
   return { frontend, convex };
 }

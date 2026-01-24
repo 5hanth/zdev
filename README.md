@@ -1,10 +1,13 @@
 # 🐂 zdev
 
-Multi-agent worktree development environment for **Convex + Vite/TanStack** projects.
+Multi-agent worktree development environment for Vite/TanStack projects.
 
 Built for [Clawdbot](https://docs.clawd.bot) users who want to run multiple AI coding agents on different features simultaneously.
 
-> ⚠️ **Currently requires:** Convex backend + Vite-based frontend (TanStack Start, plain Vite, etc.)
+Supports:
+- **Vite** / **TanStack Start** frontends
+- **Convex** backend (optional — auto-detected)
+- **Monorepos** with `web/`, `apps/web/`, etc.
 
 ## Features
 
@@ -13,8 +16,8 @@ Built for [Clawdbot](https://docs.clawd.bot) users who want to run multiple AI c
 - **Preview URLs** — Public HTTPS URLs via Traefik (optional)
 - **Config Auto-Copy** — `.env.local` and other files copied automatically
 - **Vite Support** — Auto-patches `allowedHosts` for external access
-- **Convex Integration** — Runs `convex dev` per worktree with isolated state
-- **Seed Data** — Export/import database state between worktrees
+- **Convex Integration** — Auto-detected; runs `convex dev` if present
+- **Monorepo Support** — Auto-detects `web/`, `frontend/`, `apps/web/`, etc.
 
 ## Installation
 
@@ -30,8 +33,10 @@ bun add -g zdev
 
 ### Required
 - [Bun](https://bun.sh) — `curl -fsSL https://bun.sh/install | bash`
-- [Convex](https://convex.dev) account — `bunx convex login`
-- Git repository with Convex + Vite project
+- Git repository with Vite-based frontend
+
+### Optional
+- [Convex](https://convex.dev) — auto-detected if `convex/` directory exists
 
 ### Optional (for public preview URLs)
 - [Traefik](https://traefik.io) reverse proxy with file provider
@@ -43,10 +48,10 @@ See [Traefik Setup](#traefik-setup-for-preview-urls) below.
 
 ```bash
 # 1. Initialize your project
-cd your-convex-project
+cd your-project
 zdev init
 
-# 2. Setup Convex (once per project, if not already done)
+# 2. (Convex only) Setup Convex once if not already done
 cd web  # or wherever package.json is
 bunx convex dev  # select project, then Ctrl+C
 
