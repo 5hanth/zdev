@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { Command } from "commander";
+import { create } from "./commands/create.js";
 import { init } from "./commands/init.js";
 import { start } from "./commands/start.js";
 import { stop } from "./commands/stop.js";
@@ -14,6 +15,19 @@ program
   .name("zdev")
   .description("🐂 zdev - Multi-agent worktree development environment")
   .version("0.1.0");
+
+// zdev create
+program
+  .command("create <name>")
+  .description("Create a new TanStack Start project")
+  .option("--convex", "Add Convex backend integration")
+  .option("--flat", "Flat structure (no monorepo)")
+  .action(async (name, options) => {
+    await create(name, {
+      convex: options.convex,
+      flat: options.flat,
+    });
+  });
 
 // zdev init
 program

@@ -46,6 +46,21 @@ See [Traefik Setup](#traefik-setup-for-preview-urls) below.
 
 ## Quick Start
 
+### New Project
+
+```bash
+# Create a new TanStack Start project
+zdev create my-app
+
+# Or with Convex backend
+zdev create my-app --convex
+
+# Flat structure (no monorepo)
+zdev create my-app --convex --flat
+```
+
+### Existing Project
+
 ```bash
 # 1. Initialize your project
 cd your-project
@@ -67,8 +82,19 @@ zdev stop my-feature -p /path/to/project
 
 ## Commands
 
+### `zdev create <name>`
+Create a new TanStack Start project from scratch.
+
+```bash
+zdev create my-app             # Basic TanStack Start
+zdev create my-app --convex    # With Convex backend
+zdev create my-app --flat      # Flat structure (no monorepo)
+```
+
+By default creates a monorepo with `web/` subdirectory. Use `--flat` for single-package structure.
+
 ### `zdev init [path]`
-Initialize zdev for a project. Creates seed data from current Convex state.
+Initialize zdev for an existing project. Creates seed data from current Convex state.
 
 ```bash
 zdev init                    # Current directory

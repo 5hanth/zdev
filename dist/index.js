@@ -1875,9 +1875,9 @@ var {
   Help
 } = import__.default;
 
-// src/commands/init.ts
-import { existsSync as existsSync3, mkdirSync as mkdirSync2 } from "fs";
-import { resolve as resolve2 } from "path";
+// src/commands/create.ts
+import { existsSync as existsSync3, mkdirSync as mkdirSync2, readdirSync, renameSync, rmSync, writeFileSync as writeFileSync3, readFileSync as readFileSync2 } from "fs";
+import { resolve as resolve2, join as join2 } from "path";
 
 // src/utils.ts
 import { spawn, spawnSync } from "child_process";
@@ -2075,10 +2075,210 @@ function isProcessRunning(pid) {
   }
 }
 
+// src/commands/create.ts
+var ZEBU_INDEX_PAGE = `import { createFileRoute } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/')({
+  component: Home,
+})
+
+function Home() {
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        color: '#e8e8e8',
+        padding: '2rem',
+      }}
+    >
+      <div
+        style={{
+          fontSize: '6rem',
+          marginBottom: '1rem',
+        }}
+      >
+        \uD83D\uDC02
+      </div>
+      <h1
+        style={{
+          fontSize: '3rem',
+          fontWeight: 700,
+          margin: 0,
+          background: 'linear-gradient(90deg, #00d9ff, #00ff88)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text',
+        }}
+      >
+        Ready to build
+      </h1>
+      <p
+        style={{
+          fontSize: '1.25rem',
+          color: '#888',
+          marginTop: '1rem',
+          textAlign: 'center',
+        }}
+      >
+        Your TanStack Start app is ready.
+        <br />
+        Edit <code style={{ color: '#00d9ff', background: '#1a1a2e', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>app/routes/index.tsx</code> to get started.
+      </p>
+    </div>
+  )
+}
+`;
+var CONVEX_PROVIDER = `import { ConvexProvider, ConvexReactClient } from "convex/react";
+import { ReactNode } from "react";
+
+const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
+
+export function ConvexClientProvider({ children }: { children: ReactNode }) {
+  return <ConvexProvider client={convex}>{children}</ConvexProvider>;
+}
+`;
+async function create(projectName, options = {}) {
+  const targetPath = resolve2(projectName);
+  if (existsSync3(targetPath)) {
+    console.error(`❌ Directory already exists: ${targetPath}`);
+    process.exit(1);
+  }
+  console.log(`\uD83D\uDC02 Creating new project: ${projectName}`);
+  console.log(`   Convex: ${options.convex ? "yes" : "no"}`);
+  console.log(`   Structure: ${options.flat ? "flat" : "monorepo"}`);
+  console.log(`
+\uD83D\uDCE5 Cloning TanStack Start template...`);
+  const cloneResult = run("npx", [
+    "-y",
+    "gitpick",
+    "TanStack/router/tree/main/examples/react/start-basic",
+    projectName
+  ]);
+  if (!cloneResult.success) {
+    console.error(`❌ Failed to clone template: ${cloneResult.stderr}`);
+    process.exit(1);
+  }
+  console.log(`   Template cloned`);
+  let webPath;
+  if (options.flat) {
+    webPath = targetPath;
+  } else {
+    console.log(`
+\uD83D\uDCC1 Setting up monorepo structure...`);
+    const webDir = join2(targetPath, "web");
+    const tempDir = join2(targetPath, "_temp_web");
+    mkdirSync2(tempDir, { recursive: true });
+    const files = readdirSync(targetPath);
+    for (const file of files) {
+      if (file !== "_temp_web") {
+        renameSync(join2(targetPath, file), join2(tempDir, file));
+      }
+    }
+    renameSync(tempDir, webDir);
+    webPath = webDir;
+    const rootPackageJson = {
+      name: projectName,
+      private: true,
+      workspaces: ["web"],
+      scripts: {
+        dev: "cd web && bun dev",
+        build: "cd web && bun run build"
+      }
+    };
+    writeFileSync3(join2(targetPath, "package.json"), JSON.stringify(rootPackageJson, null, 2));
+    console.log(`   Created web/ subdirectory`);
+  }
+  console.log(`
+\uD83E\uDDF9 Cleaning up demo routes...`);
+  const routesDir = join2(webPath, "app", "routes");
+  if (existsSync3(routesDir)) {
+    const routeFiles = readdirSync(routesDir);
+    for (const file of routeFiles) {
+      rmSync(join2(routesDir, file), { recursive: true, force: true });
+    }
+  } else {
+    mkdirSync2(routesDir, { recursive: true });
+  }
+  writeFileSync3(join2(routesDir, "index.tsx"), ZEBU_INDEX_PAGE);
+  console.log(`   Added clean index route`);
+  const pkgPath = join2(webPath, "package.json");
+  if (existsSync3(pkgPath)) {
+    const pkg = JSON.parse(readFileSync2(pkgPath, "utf-8"));
+    pkg.name = options.flat ? projectName : `${projectName}-web`;
+    writeFileSync3(pkgPath, JSON.stringify(pkg, null, 2));
+  }
+  if (options.convex) {
+    console.log(`
+\uD83D\uDD27 Setting up Convex...`);
+    const addResult = run("bun", ["add", "convex", "convex-react"], { cwd: webPath });
+    if (!addResult.success) {
+      console.error(`   Failed to add Convex deps: ${addResult.stderr}`);
+    } else {
+      console.log(`   Added convex dependencies`);
+    }
+    const initResult = run("bunx", ["convex", "init"], { cwd: webPath });
+    if (!initResult.success) {
+      console.log(`   Note: Run 'bunx convex dev' to complete Convex setup`);
+    } else {
+      console.log(`   Initialized Convex`);
+    }
+    const componentsDir = join2(webPath, "app", "components");
+    mkdirSync2(componentsDir, { recursive: true });
+    writeFileSync3(join2(componentsDir, "ConvexClientProvider.tsx"), CONVEX_PROVIDER);
+    console.log(`   Created ConvexClientProvider`);
+    writeFileSync3(join2(webPath, ".env.local.example"), `VITE_CONVEX_URL=your_convex_url_here
+`);
+    console.log(`   Created .env.local.example`);
+    console.log(`
+   ⚠️  To complete Convex setup:`);
+    console.log(`      1. cd ${options.flat ? projectName : projectName + "/web"}`);
+    console.log(`      2. bunx convex dev  (select/create project)`);
+    console.log(`      3. Wrap your app with <ConvexClientProvider> in app/root.tsx`);
+  }
+  console.log(`
+\uD83D\uDCE6 Installing dependencies...`);
+  const installResult = run("bun", ["install"], { cwd: webPath });
+  if (!installResult.success) {
+    console.error(`   Failed to install: ${installResult.stderr}`);
+  } else {
+    console.log(`   Dependencies installed`);
+  }
+  console.log(`
+\uD83D\uDCDA Initializing git...`);
+  run("git", ["init"], { cwd: targetPath });
+  run("git", ["add", "."], { cwd: targetPath });
+  run("git", ["commit", "-m", "Initial commit from zdev create"], { cwd: targetPath });
+  console.log(`   Git initialized`);
+  console.log(`
+${"─".repeat(50)}`);
+  console.log(`✅ Project "${projectName}" created!
+`);
+  console.log(`\uD83D\uDCC1 Location: ${targetPath}`);
+  console.log(`
+\uD83D\uDCDD Next steps:`);
+  console.log(`   cd ${projectName}`);
+  if (!options.flat) {
+    console.log(`   cd web`);
+  }
+  if (options.convex) {
+    console.log(`   bunx convex dev    # Setup Convex project`);
+  }
+  console.log(`   bun dev            # Start dev server`);
+  console.log(`${"─".repeat(50)}`);
+}
+
 // src/commands/init.ts
+import { existsSync as existsSync4, mkdirSync as mkdirSync3 } from "fs";
+import { resolve as resolve3 } from "path";
 async function init(projectPath = ".", options = {}) {
-  const fullPath = resolve2(projectPath);
-  if (!existsSync3(fullPath)) {
+  const fullPath = resolve3(projectPath);
+  if (!existsSync4(fullPath)) {
     console.error(`❌ Path does not exist: ${fullPath}`);
     process.exit(1);
   }
@@ -2088,9 +2288,9 @@ async function init(projectPath = ".", options = {}) {
   }
   const repoName = getRepoName(fullPath);
   console.log(`\uD83D\uDC02 Initializing zdev for: ${repoName}`);
-  const zdevDir = resolve2(fullPath, ".zdev");
-  if (!existsSync3(zdevDir)) {
-    mkdirSync2(zdevDir, { recursive: true });
+  const zdevDir = resolve3(fullPath, ".zdev");
+  if (!existsSync4(zdevDir)) {
+    mkdirSync3(zdevDir, { recursive: true });
     console.log(`   Created ${zdevDir}`);
   }
   const projectConfig = {
@@ -2098,11 +2298,11 @@ async function init(projectPath = ".", options = {}) {
     path: fullPath,
     initialized: new Date().toISOString()
   };
-  const configPath = resolve2(zdevDir, "project.json");
+  const configPath = resolve3(zdevDir, "project.json");
   await Bun.write(configPath, JSON.stringify(projectConfig, null, 2));
   console.log(`   Created project config`);
-  const gitignorePath = resolve2(fullPath, ".gitignore");
-  if (existsSync3(gitignorePath)) {
+  const gitignorePath = resolve3(fullPath, ".gitignore");
+  if (existsSync4(gitignorePath)) {
     const content = await Bun.file(gitignorePath).text();
     if (!content.includes(".zdev")) {
       await Bun.write(gitignorePath, content + `
@@ -2114,8 +2314,8 @@ async function init(projectPath = ".", options = {}) {
   if (options.seed) {
     console.log(`
 \uD83D\uDCE6 Creating seed data...`);
-    const convexDir = resolve2(fullPath, "convex");
-    if (!existsSync3(convexDir)) {
+    const convexDir = resolve3(fullPath, "convex");
+    if (!existsSync4(convexDir)) {
       console.log(`   No convex/ directory found, skipping seed`);
     } else {
       const seedPath = getSeedPath(repoName);
@@ -2138,24 +2338,24 @@ Next steps:`);
 }
 
 // src/commands/start.ts
-import { existsSync as existsSync4, readFileSync as readFileSync2, writeFileSync as writeFileSync3 } from "fs";
-import { resolve as resolve3, basename as basename3, join as join2 } from "path";
+import { existsSync as existsSync5, readFileSync as readFileSync3, writeFileSync as writeFileSync4 } from "fs";
+import { resolve as resolve4, basename as basename3, join as join3 } from "path";
 function detectWebDir(worktreePath) {
   const commonDirs = ["web", "frontend", "app", "client", "packages/web", "apps/web"];
   for (const dir of commonDirs) {
-    const packagePath = join2(worktreePath, dir, "package.json");
-    if (existsSync4(packagePath)) {
+    const packagePath = join3(worktreePath, dir, "package.json");
+    if (existsSync5(packagePath)) {
       return dir;
     }
   }
-  if (existsSync4(join2(worktreePath, "package.json"))) {
+  if (existsSync5(join3(worktreePath, "package.json"))) {
     return ".";
   }
   return "web";
 }
 async function start(featureName, projectPath = ".", options = {}) {
-  const fullPath = resolve3(projectPath);
-  if (!existsSync4(fullPath)) {
+  const fullPath = resolve4(projectPath);
+  if (!existsSync5(fullPath)) {
     console.error(`❌ Path does not exist: ${fullPath}`);
     process.exit(1);
   }
@@ -2185,7 +2385,7 @@ async function start(featureName, projectPath = ".", options = {}) {
   }
   console.log(`
 \uD83C\uDF33 Creating worktree...`);
-  if (existsSync4(worktreePath)) {
+  if (existsSync5(worktreePath)) {
     console.error(`   Worktree path already exists: ${worktreePath}`);
     process.exit(1);
   }
@@ -2196,20 +2396,20 @@ async function start(featureName, projectPath = ".", options = {}) {
   }
   console.log(`   Created: ${worktreePath}`);
   const webDir = options.webDir || detectWebDir(worktreePath);
-  const webPath = webDir === "." ? worktreePath : join2(worktreePath, webDir);
+  const webPath = webDir === "." ? worktreePath : join3(worktreePath, webDir);
   console.log(`
 \uD83D\uDCC1 Web directory: ${webDir === "." ? "(root)" : webDir}`);
   if (config.copyPatterns && config.copyPatterns.length > 0) {
     console.log(`
 \uD83D\uDCCB Copying config files...`);
-    const mainWebPath = webDir === "." ? fullPath : join2(fullPath, webDir);
+    const mainWebPath = webDir === "." ? fullPath : join3(fullPath, webDir);
     for (const pattern of config.copyPatterns) {
-      const srcPath = join2(mainWebPath, pattern);
-      const destPath = join2(webPath, pattern);
-      if (existsSync4(srcPath) && !existsSync4(destPath)) {
+      const srcPath = join3(mainWebPath, pattern);
+      const destPath = join3(webPath, pattern);
+      if (existsSync5(srcPath) && !existsSync5(destPath)) {
         try {
-          const content = readFileSync2(srcPath);
-          writeFileSync3(destPath, content);
+          const content = readFileSync3(srcPath);
+          writeFileSync4(destPath, content);
           console.log(`   Copied ${pattern}`);
         } catch (e) {
           console.log(`   Could not copy ${pattern}`);
@@ -2219,7 +2419,7 @@ async function start(featureName, projectPath = ".", options = {}) {
   }
   console.log(`
 \uD83D\uDCE6 Installing dependencies...`);
-  if (!existsSync4(join2(webPath, "package.json"))) {
+  if (!existsSync5(join3(webPath, "package.json"))) {
     console.error(`   No package.json found in ${webPath}`);
   } else {
     const installResult = run("bun", ["install"], { cwd: webPath });
@@ -2229,9 +2429,9 @@ async function start(featureName, projectPath = ".", options = {}) {
       console.log(`   Dependencies installed`);
     }
   }
-  const hasConvex = existsSync4(join2(webPath, "convex")) || existsSync4(join2(worktreePath, "convex"));
+  const hasConvex = existsSync5(join3(webPath, "convex")) || existsSync5(join3(worktreePath, "convex"));
   const seedPath = getSeedPath(repoName);
-  if (options.seed && hasConvex && existsSync4(seedPath)) {
+  if (options.seed && hasConvex && existsSync5(seedPath)) {
     console.log(`
 \uD83C\uDF31 Importing seed data...`);
     const seedResult = run("bunx", ["convex", "import", seedPath], {
@@ -2256,21 +2456,21 @@ async function start(featureName, projectPath = ".", options = {}) {
 \uD83D\uDE80 Starting Convex dev server...`);
     convexPid = runBackground("bunx", ["convex", "dev", "--tail-logs", "disable"], { cwd: webPath });
     console.log(`   Convex PID: ${convexPid}`);
-    await new Promise((resolve4) => setTimeout(resolve4, 2000));
+    await new Promise((resolve5) => setTimeout(resolve5, 2000));
   }
-  const viteConfigTsPath = join2(webPath, "vite.config.ts");
-  const viteConfigJsPath = join2(webPath, "vite.config.js");
-  const viteConfigPath = existsSync4(viteConfigTsPath) ? viteConfigTsPath : existsSync4(viteConfigJsPath) ? viteConfigJsPath : null;
+  const viteConfigTsPath = join3(webPath, "vite.config.ts");
+  const viteConfigJsPath = join3(webPath, "vite.config.js");
+  const viteConfigPath = existsSync5(viteConfigTsPath) ? viteConfigTsPath : existsSync5(viteConfigJsPath) ? viteConfigJsPath : null;
   if (viteConfigPath) {
     try {
-      let viteConfig = readFileSync2(viteConfigPath, "utf-8");
+      let viteConfig = readFileSync3(viteConfigPath, "utf-8");
       if (!viteConfig.includes("allowedHosts")) {
         if (viteConfig.includes("defineConfig({")) {
           viteConfig = viteConfig.replace(/defineConfig\(\{/, `defineConfig({
   server: {
     allowedHosts: true,
   },`);
-          writeFileSync3(viteConfigPath, viteConfig);
+          writeFileSync4(viteConfigPath, viteConfig);
           console.log(`   Patched ${basename3(viteConfigPath)} for external access`);
           run("git", ["update-index", "--skip-worktree", basename3(viteConfigPath)], { cwd: webPath });
         }
@@ -2291,7 +2491,7 @@ async function start(featureName, projectPath = ".", options = {}) {
       routePath = worktreeName;
       console.log(`
 \uD83D\uDD17 Setting up Traefik route...`);
-      await new Promise((resolve4) => setTimeout(resolve4, 2000));
+      await new Promise((resolve5) => setTimeout(resolve5, 2000));
       if (traefikAddRoute(worktreeName, ports.frontend)) {
         publicUrl = `https://${worktreeName}.${traefikStatus.devDomain}`;
         console.log(`   Public URL: ${publicUrl}`);
@@ -2337,13 +2537,13 @@ ${"─".repeat(50)}`);
 }
 
 // src/commands/stop.ts
-import { resolve as resolve4 } from "path";
+import { resolve as resolve5 } from "path";
 async function stop(featureName, options = {}) {
   const config = loadConfig();
   let worktreeName;
   let allocation;
   if (options.project) {
-    const projectPath = resolve4(options.project);
+    const projectPath = resolve5(options.project);
     const repoName = isGitRepo(projectPath) ? getRepoName(projectPath) : options.project;
     worktreeName = `${repoName}-${featureName}`;
     allocation = config.allocations[worktreeName];
@@ -2410,7 +2610,7 @@ Run 'zdev list' to see active features`);
 }
 
 // src/commands/list.ts
-import { existsSync as existsSync5 } from "fs";
+import { existsSync as existsSync6 } from "fs";
 async function list(options = {}) {
   const config = loadConfig();
   const allocations = Object.entries(config.allocations);
@@ -2442,7 +2642,7 @@ No active features.
 `);
   for (const [name, alloc] of allocations) {
     const worktreePath = getWorktreePath(name);
-    const worktreeExists = existsSync5(worktreePath);
+    const worktreeExists = existsSync6(worktreePath);
     const frontendRunning = alloc.pids.frontend ? isProcessRunning(alloc.pids.frontend) : false;
     const convexRunning = alloc.pids.convex ? isProcessRunning(alloc.pids.convex) : false;
     const statusEmoji = frontendRunning && convexRunning ? "\uD83D\uDFE2" : frontendRunning || convexRunning ? "\uD83D\uDFE1" : "\uD83D\uDD34";
@@ -2467,15 +2667,15 @@ Commands:`);
 }
 
 // src/commands/clean.ts
-import { existsSync as existsSync6, rmSync } from "fs";
-import { resolve as resolve5 } from "path";
+import { existsSync as existsSync7, rmSync as rmSync2 } from "fs";
+import { resolve as resolve6 } from "path";
 async function clean(featureName, options = {}) {
   const config = loadConfig();
   let worktreeName;
   let allocation;
   let projectPath;
   if (options.project) {
-    projectPath = resolve5(options.project);
+    projectPath = resolve6(options.project);
     const repoName = isGitRepo(projectPath) ? getRepoName(projectPath) : options.project;
     worktreeName = `${repoName}-${featureName}`;
     allocation = config.allocations[worktreeName];
@@ -2517,7 +2717,7 @@ Active features:`);
     }
     projectPath = allocation.projectPath;
   }
-  if (existsSync6(worktreePath)) {
+  if (existsSync7(worktreePath)) {
     console.log(`
 \uD83D\uDDD1️  Removing worktree...`);
     if (projectPath && isGitRepo(projectPath)) {
@@ -2525,7 +2725,7 @@ Active features:`);
       if (!result.success) {
         if (options.force) {
           console.log(`   Git worktree remove failed, force removing directory...`);
-          rmSync(worktreePath, { recursive: true, force: true });
+          rmSync2(worktreePath, { recursive: true, force: true });
         } else {
           console.error(`   Failed to remove worktree: ${result.error}`);
           console.log(`   Use --force to force remove`);
@@ -2533,7 +2733,7 @@ Active features:`);
         }
       }
     } else if (options.force) {
-      rmSync(worktreePath, { recursive: true, force: true });
+      rmSync2(worktreePath, { recursive: true, force: true });
     } else {
       console.error(`   Cannot remove worktree: project path unknown`);
       console.log(`   Use --force to force remove, or specify --project`);
@@ -2553,11 +2753,11 @@ Active features:`);
 }
 
 // src/commands/seed.ts
-import { existsSync as existsSync7 } from "fs";
-import { resolve as resolve6 } from "path";
+import { existsSync as existsSync8 } from "fs";
+import { resolve as resolve7 } from "path";
 async function seedExport(projectPath = ".", options = {}) {
-  const fullPath = resolve6(projectPath);
-  if (!existsSync7(fullPath)) {
+  const fullPath = resolve7(projectPath);
+  if (!existsSync8(fullPath)) {
     console.error(`❌ Path does not exist: ${fullPath}`);
     process.exit(1);
   }
@@ -2583,14 +2783,14 @@ async function seedExport(projectPath = ".", options = {}) {
   }
 }
 async function seedImport(projectPath = ".", options = {}) {
-  const fullPath = resolve6(projectPath);
-  if (!existsSync7(fullPath)) {
+  const fullPath = resolve7(projectPath);
+  if (!existsSync8(fullPath)) {
     console.error(`❌ Path does not exist: ${fullPath}`);
     process.exit(1);
   }
   let repoName;
-  const projectConfigPath = resolve6(fullPath, ".zdev", "project.json");
-  if (existsSync7(projectConfigPath)) {
+  const projectConfigPath = resolve7(fullPath, ".zdev", "project.json");
+  if (existsSync8(projectConfigPath)) {
     try {
       const config = JSON.parse(await Bun.file(projectConfigPath).text());
       repoName = config.name;
@@ -2604,7 +2804,7 @@ async function seedImport(projectPath = ".", options = {}) {
     process.exit(1);
   }
   const seedPath = getSeedPath(repoName);
-  if (!existsSync7(seedPath)) {
+  if (!existsSync8(seedPath)) {
     console.error(`❌ No seed found for ${repoName}`);
     console.log(`   Expected: ${seedPath}`);
     console.log(`
@@ -2721,6 +2921,12 @@ Commands:`);
 // src/index.ts
 var program2 = new Command;
 program2.name("zdev").description("\uD83D\uDC02 zdev - Multi-agent worktree development environment").version("0.1.0");
+program2.command("create <name>").description("Create a new TanStack Start project").option("--convex", "Add Convex backend integration").option("--flat", "Flat structure (no monorepo)").action(async (name, options) => {
+  await create(name, {
+    convex: options.convex,
+    flat: options.flat
+  });
+});
 program2.command("init [path]").description("Initialize zdev for a project").option("-s, --seed", "Create initial seed data from current Convex state").action(async (path, options) => {
   await init(path, options);
 });
