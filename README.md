@@ -133,10 +133,16 @@ Config stored at `~/.zdev/config.json`:
 |-----|---------|-------------|
 | `devDomain` | (empty) | Domain for preview URLs (e.g., `dev.example.com`) |
 | `dockerHostIp` | `172.17.0.1` | How Traefik (in Docker) reaches host services |
-| `traefikConfigDir` | `/infra/traefik/dynamic` | Path to Traefik's file provider directory |
+| `traefikConfigDir` | `/infra/traefik/dynamic` | Directory where Traefik watches for route configs (see below) |
 | `copyPatterns` | `.env.local`, etc. | Files to auto-copy to worktrees |
 
 ## Traefik Setup for Preview URLs
+
+> **What's a "dynamic config directory"?**
+> 
+> Traefik can be configured to watch a folder for `.yml` files. Each file defines a route (e.g., "requests to `auth.dev.example.com` go to port 5173"). When you add/remove files, Traefik automatically updates its routing — no restart needed.
+> 
+> zdev uses this to create/remove routes on-the-fly as you start/stop features.
 
 To get public HTTPS URLs for each feature:
 
