@@ -135,17 +135,19 @@ export async function start(
     }
   }
 
-  // Install dependencies
-  console.log(`\n📦 Installing dependencies...`);
-  if (!existsSync(join(webPath, "package.json"))) {
-    console.error(`   No package.json found in ${webPath}`);
-  } else {
-    const installResult = run("bun", ["install"], { cwd: webPath });
-    if (!installResult.success) {
-      console.error(`   Failed to install: ${installResult.stderr}`);
+  // Run setup script if exists
+  const setupScriptPath = join(worktreePath, ".zdev", "setup.sh");
+  if (existsSync(setupScriptPath)) {
+    console.log(`\n📦 Running setup script...`);
+    const setupResult = run("bash", [setupScriptPath], { cwd: webPath });
+    if (!setupResult.success) {
+      console.error(`   Setup script failed: ${setupResult.stderr}`);
     } else {
-      console.log(`   Dependencies installed`);
+      console.log(`   Setup complete`);
     }
+  } else {
+    console.log(`\n⚠️  No .zdev/setup.sh found, skipping setup`);
+    console.log(`   Create one in your project to automate dependency installation`);
   }
   
   // Check if this is a Convex project

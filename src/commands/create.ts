@@ -76,6 +76,20 @@ export function ConvexClientProvider({ children }: { children: ReactNode }) {
 }
 `;
 
+const SETUP_SCRIPT = `#!/bin/bash
+# .zdev/setup.sh - Runs after worktree creation
+# Edit this to customize your setup (change package manager, add commands, etc.)
+
+set -e
+
+# Install dependencies
+bun install
+
+# Add any other setup commands below:
+# bunx prisma generate
+# cp ../.env.local .
+`;
+
 export async function create(
   projectName: string,
   options: CreateOptions = {}
@@ -214,7 +228,15 @@ export async function create(
     console.log(`      3. Wrap your app with <ConvexClientProvider> in app/root.tsx`);
   }
   
-  // Install dependencies
+  // Create .zdev/setup.sh for worktree setup
+  console.log(`\n📜 Creating setup script...`);
+  const zdevDir = join(targetPath, ".zdev");
+  mkdirSync(zdevDir, { recursive: true });
+  const setupScriptPath = join(zdevDir, "setup.sh");
+  writeFileSync(setupScriptPath, SETUP_SCRIPT, { mode: 0o755 });
+  console.log(`   Created .zdev/setup.sh`);
+  
+  // Install dependencies (initial setup)
   console.log(`\n📦 Installing dependencies...`);
   const installResult = run("bun", ["install"], { cwd: webPath });
   if (!installResult.success) {

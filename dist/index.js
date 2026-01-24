@@ -2143,6 +2143,19 @@ export function ConvexClientProvider({ children }: { children: ReactNode }) {
   return <ConvexProvider client={convex}>{children}</ConvexProvider>;
 }
 `;
+var SETUP_SCRIPT = `#!/bin/bash
+# .zdev/setup.sh - Runs after worktree creation
+# Edit this to customize your setup (change package manager, add commands, etc.)
+
+set -e
+
+# Install dependencies
+bun install
+
+# Add any other setup commands below:
+# bunx prisma generate
+# cp ../.env.local .
+`;
 async function create(projectName, options = {}) {
   const targetPath = resolve2(projectName);
   if (existsSync3(targetPath)) {
@@ -2241,6 +2254,13 @@ async function create(projectName, options = {}) {
     console.log(`      2. bunx convex dev  (select/create project)`);
     console.log(`      3. Wrap your app with <ConvexClientProvider> in app/root.tsx`);
   }
+  console.log(`
+\uD83D\uDCDC Creating setup script...`);
+  const zdevDir = join2(targetPath, ".zdev");
+  mkdirSync2(zdevDir, { recursive: true });
+  const setupScriptPath = join2(zdevDir, "setup.sh");
+  writeFileSync3(setupScriptPath, SETUP_SCRIPT, { mode: 493 });
+  console.log(`   Created .zdev/setup.sh`);
   console.log(`
 \uD83D\uDCE6 Installing dependencies...`);
   const installResult = run("bun", ["install"], { cwd: webPath });
@@ -2417,17 +2437,20 @@ async function start(featureName, projectPath = ".", options = {}) {
       }
     }
   }
-  console.log(`
-\uD83D\uDCE6 Installing dependencies...`);
-  if (!existsSync5(join3(webPath, "package.json"))) {
-    console.error(`   No package.json found in ${webPath}`);
-  } else {
-    const installResult = run("bun", ["install"], { cwd: webPath });
-    if (!installResult.success) {
-      console.error(`   Failed to install: ${installResult.stderr}`);
+  const setupScriptPath = join3(worktreePath, ".zdev", "setup.sh");
+  if (existsSync5(setupScriptPath)) {
+    console.log(`
+\uD83D\uDCE6 Running setup script...`);
+    const setupResult = run("bash", [setupScriptPath], { cwd: webPath });
+    if (!setupResult.success) {
+      console.error(`   Setup script failed: ${setupResult.stderr}`);
     } else {
-      console.log(`   Dependencies installed`);
+      console.log(`   Setup complete`);
     }
+  } else {
+    console.log(`
+⚠️  No .zdev/setup.sh found, skipping setup`);
+    console.log(`   Create one in your project to automate dependency installation`);
   }
   const hasConvex = existsSync5(join3(webPath, "convex")) || existsSync5(join3(worktreePath, "convex"));
   const seedPath = getSeedPath(repoName);
