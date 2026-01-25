@@ -3067,8 +3067,13 @@ Commands:`);
 }
 
 // src/index.ts
+import { readFileSync as readFileSync5 } from "fs";
+import { fileURLToPath } from "url";
+import { dirname, join as join4 } from "path";
+var __dirname2 = dirname(fileURLToPath(import.meta.url));
+var pkg = JSON.parse(readFileSync5(join4(__dirname2, "..", "package.json"), "utf-8"));
 var program2 = new Command;
-program2.name("zdev").description("\uD83D\uDC02 zdev - Multi-agent worktree development environment").version("0.1.0");
+program2.name("zdev").description(`\uD83D\uDC02 zdev v${pkg.version} - Multi-agent worktree development environment`).version(pkg.version);
 program2.command("create <name>").description("Create a new TanStack Start project").option("--convex", "Add Convex backend integration").option("--flat", "Flat structure (no monorepo)").action(async (name, options) => {
   await create(name, {
     convex: options.convex,

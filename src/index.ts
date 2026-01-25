@@ -8,13 +8,19 @@ import { list } from "./commands/list.js";
 import { clean } from "./commands/clean.js";
 import { seedExport, seedImport } from "./commands/seed.js";
 import { configCmd } from "./commands/config.js";
+import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf-8"));
 
 const program = new Command();
 
 program
   .name("zdev")
-  .description("🐂 zdev - Multi-agent worktree development environment")
-  .version("0.1.0");
+  .description(`🐂 zdev v${pkg.version} - Multi-agent worktree development environment`)
+  .version(pkg.version);
 
 // zdev create
 program
