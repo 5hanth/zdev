@@ -52,7 +52,7 @@ program
   .option("--port <number>", "Frontend port (auto-allocated if not specified)", parseInt)
   .option("--local", "Local only - skip public URL setup via Traefik")
   .option("-s, --seed", "Import seed data into the new worktree")
-  .option("-b, --base-branch <branch>", "Base branch to create from", "origin/main")
+  .option("-b, --base-branch <branch>", "Base branch to create from (auto-detected if not specified)")
   .option("-w, --web-dir <dir>", "Subdirectory containing package.json (auto-detected if not specified)")
   .action(async (feature, options) => {
     await start(feature, options.project, {
