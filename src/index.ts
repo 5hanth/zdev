@@ -8,6 +8,7 @@ import { list } from "./commands/list.js";
 import { clean } from "./commands/clean.js";
 import { seedExport, seedImport } from "./commands/seed.js";
 import { configCmd } from "./commands/config.js";
+import { pr } from "./commands/pr.js";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
@@ -122,6 +123,24 @@ program
   .option("-l, --list", "List current configuration")
   .action(async (options) => {
     await configCmd(options);
+  });
+
+// zdev pr
+program
+  .command("pr [feature]")
+  .description("Create a pull request for a feature branch")
+  .option("-p, --project <path>", "Project path", ".")
+  .option("-t, --title <title>", "PR title (auto-generated if not specified)")
+  .option("-b, --body <body>", "PR body (preview URL auto-added)")
+  .option("-d, --draft", "Create as draft PR")
+  .option("-w, --web", "Open in browser instead of CLI")
+  .action(async (feature, options) => {
+    await pr(feature, options.project, {
+      title: options.title,
+      body: options.body,
+      draft: options.draft,
+      web: options.web,
+    });
   });
 
 // zdev status (alias for list)

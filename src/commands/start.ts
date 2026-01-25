@@ -301,6 +301,8 @@ export async function start(
     frontendPort: ports.frontend,
     convexPort: ports.convex,
     funnelPath: routePath,
+    worktreePath,
+    publicUrl: publicUrl || undefined,
     pids: {
       frontend: frontendPid,
       convex: convexPid,

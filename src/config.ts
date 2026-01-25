@@ -15,6 +15,8 @@ export interface WorktreeAllocation {
   frontendPort: number;
   convexPort: number;
   funnelPath: string;
+  worktreePath?: string;  // Full path to worktree
+  publicUrl?: string;     // Public preview URL
   pids: {
     frontend?: number;
     convex?: number;

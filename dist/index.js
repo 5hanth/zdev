@@ -2663,6 +2663,8 @@ async function start(featureName, projectPath = ".", options = {}) {
     frontendPort: ports.frontend,
     convexPort: ports.convex,
     funnelPath: routePath,
+    worktreePath,
+    publicUrl: publicUrl || undefined,
     pids: {
       frontend: frontendPid,
       convex: convexPid
@@ -3069,6 +3071,155 @@ Commands:`);
   }
 }
 
+// src/commands/pr.ts
+import { resolve as resolve8, basename as basename4 } from "path";
+async function pr(featureName, projectPath = ".", options = {}) {
+  const fullPath = resolve8(projectPath);
+  let worktreePath = fullPath;
+  let allocation;
+  let projectName = getRepoName(fullPath) || basename4(fullPath);
+  const config = loadConfig();
+  if (featureName) {
+    const allocKey = `${projectName}-${featureName}`;
+    allocation = config.allocations[allocKey];
+    if (!allocation) {
+      const found = Object.entries(config.allocations).find(([key, alloc]) => key.endsWith(`-${featureName}`));
+      if (found) {
+        allocation = found[1];
+        projectName = allocation.project;
+      }
+    }
+    if (allocation) {
+      worktreePath = allocation.worktreePath || resolve8(config.worktreesDir, `${projectName}-${featureName}`);
+    }
+  } else {
+    const cwd = process.cwd();
+    const found = Object.entries(config.allocations).find(([_, alloc]) => alloc.worktreePath === cwd || cwd.startsWith(alloc.worktreePath || ""));
+    if (found) {
+      allocation = found[1];
+      featureName = found[0].split("-").slice(1).join("-");
+      projectName = allocation.project;
+      worktreePath = allocation.worktreePath || cwd;
+    }
+  }
+  if (!isGitRepo(worktreePath)) {
+    console.error(`❌ Not a git repository: ${worktreePath}`);
+    process.exit(1);
+  }
+  const branchResult = run("git", ["branch", "--show-current"], { cwd: worktreePath });
+  if (!branchResult.success || !branchResult.stdout.trim()) {
+    console.error("❌ Could not determine current branch");
+    process.exit(1);
+  }
+  const branch = branchResult.stdout.trim();
+  console.log(`\uD83D\uDC02 Creating PR for: ${branch}`);
+  if (allocation) {
+    console.log(`   Project: ${projectName}`);
+    console.log(`   Feature: ${featureName}`);
+  }
+  const ghCheck = run("which", ["gh"]);
+  if (!ghCheck.success) {
+    console.error("❌ GitHub CLI (gh) not found. Install: https://cli.github.com");
+    process.exit(1);
+  }
+  const authCheck = run("gh", ["auth", "status"], { cwd: worktreePath });
+  if (!authCheck.success) {
+    console.error("❌ Not authenticated with GitHub. Run: gh auth login");
+    process.exit(1);
+  }
+  console.log(`
+\uD83D\uDCE4 Pushing branch...`);
+  const pushResult = run("git", ["push", "-u", "origin", branch], { cwd: worktreePath });
+  if (!pushResult.success) {
+    if (!pushResult.stderr.includes("Everything up-to-date")) {
+      console.error(`   Failed to push: ${pushResult.stderr}`);
+      process.exit(1);
+    }
+    console.log(`   Already up to date`);
+  } else {
+    console.log(`   Pushed to origin/${branch}`);
+  }
+  let title = options.title;
+  if (!title) {
+    const featureForTitle = featureName || branch.replace(/^feature\//, "");
+    title = featureForTitle.split(/[-_]/).map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+  }
+  let body = options.body || "";
+  if (allocation && allocation.publicUrl) {
+    const previewSection = `## Preview
+\uD83D\uDD17 ${allocation.publicUrl}
+
+`;
+    body = previewSection + body;
+  } else if (config.devDomain && featureName && projectName) {
+    const previewUrl = `https://${projectName}-${featureName}.${config.devDomain}`;
+    const previewSection = `## Preview
+\uD83D\uDD17 ${previewUrl}
+
+`;
+    body = previewSection + body;
+  }
+  if (!body.includes("Created with zdev")) {
+    body = body.trim() + `
+
+---
+*Created with [zdev](https://github.com/5hanth/zdev)*`;
+  }
+  const existingPr = run("gh", ["pr", "view", branch, "--json", "url"], { cwd: worktreePath });
+  if (existingPr.success) {
+    try {
+      const prData = JSON.parse(existingPr.stdout);
+      console.log(`
+✅ PR already exists!`);
+      console.log(`
+\uD83D\uDD17 ${prData.url}`);
+      return;
+    } catch {}
+  }
+  console.log(`
+\uD83D\uDCDD Creating pull request...`);
+  const prArgs = ["pr", "create", "--title", title, "--body", body];
+  if (options.draft) {
+    prArgs.push("--draft");
+  }
+  if (options.web) {
+    prArgs.push("--web");
+    const webResult = run("gh", prArgs, { cwd: worktreePath });
+    if (!webResult.success) {
+      console.error(`   Failed: ${webResult.stderr}`);
+      process.exit(1);
+    }
+    console.log(`   Opened in browser`);
+    return;
+  }
+  const prResult = run("gh", prArgs, { cwd: worktreePath });
+  if (!prResult.success) {
+    if (prResult.stderr.includes("already exists")) {
+      console.log(`   PR already exists for this branch`);
+      const viewResult = run("gh", ["pr", "view", "--json", "url"], { cwd: worktreePath });
+      if (viewResult.success) {
+        try {
+          const prData = JSON.parse(viewResult.stdout);
+          console.log(`
+\uD83D\uDD17 ${prData.url}`);
+        } catch {}
+      }
+      return;
+    }
+    console.error(`   Failed: ${prResult.stderr}`);
+    process.exit(1);
+  }
+  const prUrl = prResult.stdout.trim();
+  console.log(`
+✅ Pull request created!`);
+  console.log(`
+\uD83D\uDD17 ${prUrl}`);
+  if (allocation?.publicUrl) {
+    console.log(`
+\uD83D\uDCF1 Preview: ${allocation.publicUrl}`);
+  }
+}
+
 // src/index.ts
 import { readFileSync as readFileSync5 } from "fs";
 import { fileURLToPath } from "url";
@@ -3113,6 +3264,14 @@ seedCmd.command("import [path]").description("Import seed data into current work
 });
 program2.command("config").description("View and manage zdev configuration").option("-a, --add <pattern>", "Add a file pattern to auto-copy").option("-r, --remove <pattern>", "Remove a file pattern").option("-s, --set <key=value>", "Set a config value (devDomain, dockerHostIp, traefikConfigDir)").option("-l, --list", "List current configuration").action(async (options) => {
   await configCmd(options);
+});
+program2.command("pr [feature]").description("Create a pull request for a feature branch").option("-p, --project <path>", "Project path", ".").option("-t, --title <title>", "PR title (auto-generated if not specified)").option("-b, --body <body>", "PR body (preview URL auto-added)").option("-d, --draft", "Create as draft PR").option("-w, --web", "Open in browser instead of CLI").action(async (feature, options) => {
+  await pr(feature, options.project, {
+    title: options.title,
+    body: options.body,
+    draft: options.draft,
+    web: options.web
+  });
 });
 program2.command("status").description("Show zdev status (alias for list)").action(async () => {
   await list({});
