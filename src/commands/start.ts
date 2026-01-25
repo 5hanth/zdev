@@ -105,10 +105,13 @@ export async function start(
     process.exit(1);
   }
   
-  // Fetch latest
-  console.log(`\n📥 Fetching latest from origin...`);
-  if (!gitFetch(fullPath)) {
-    console.error(`   Failed to fetch, continuing anyway...`);
+  // Fetch latest (only if origin remote exists)
+  const hasOrigin = run("git", ["remote", "get-url", "origin"], { cwd: fullPath });
+  if (hasOrigin.success) {
+    console.log(`\n📥 Fetching latest from origin...`);
+    if (!gitFetch(fullPath)) {
+      console.error(`   Failed to fetch, continuing anyway...`);
+    }
   }
   
   // Create worktree

@@ -2515,10 +2515,13 @@ async function start(featureName, projectPath = ".", options = {}) {
     console.log(`   Run: zdev stop ${featureName} --project ${fullPath}`);
     process.exit(1);
   }
-  console.log(`
+  const hasOrigin = run("git", ["remote", "get-url", "origin"], { cwd: fullPath });
+  if (hasOrigin.success) {
+    console.log(`
 \uD83D\uDCE5 Fetching latest from origin...`);
-  if (!gitFetch(fullPath)) {
-    console.error(`   Failed to fetch, continuing anyway...`);
+    if (!gitFetch(fullPath)) {
+      console.error(`   Failed to fetch, continuing anyway...`);
+    }
   }
   console.log(`
 \uD83C\uDF33 Creating worktree...`);
