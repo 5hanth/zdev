@@ -3139,25 +3139,54 @@ async function pr(featureName, projectPath = ".", options = {}) {
   } else {
     console.log(`   Pushed to origin/${branch}`);
   }
+  const defaultBranch = run("git", ["symbolic-ref", "refs/remotes/origin/HEAD", "--short"], { cwd: worktreePath });
+  const baseBranch = defaultBranch.success ? defaultBranch.stdout.trim().replace("origin/", "") : "main";
+  const commitsResult = run("git", ["log", `origin/${baseBranch}..HEAD`, "--pretty=format:%s"], { cwd: worktreePath });
+  const commits = commitsResult.success ? commitsResult.stdout.trim().split(`
+`).filter(Boolean) : [];
+  const filesResult = run("git", ["diff", `origin/${baseBranch}..HEAD`, "--stat", "--stat-width=60"], { cwd: worktreePath });
+  const filesSummary = filesResult.success ? filesResult.stdout.trim() : "";
+  const diffStatResult = run("git", ["diff", `origin/${baseBranch}..HEAD`, "--shortstat"], { cwd: worktreePath });
+  const diffStat = diffStatResult.success ? diffStatResult.stdout.trim() : "";
   let title = options.title;
   if (!title) {
-    const featureForTitle = featureName || branch.replace(/^feature\//, "");
-    title = featureForTitle.split(/[-_]/).map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+    if (commits.length > 0) {
+      title = commits[0];
+    } else {
+      const featureForTitle = featureName || branch.replace(/^feature\//, "");
+      title = featureForTitle.split(/[-_]/).map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+    }
   }
   let body = options.body || "";
   if (allocation && allocation.publicUrl) {
-    const previewSection = `## Preview
+    body += `## Preview
 \uD83D\uDD17 ${allocation.publicUrl}
 
 `;
-    body = previewSection + body;
   } else if (config.devDomain && featureName && projectName) {
     const previewUrl = `https://${projectName}-${featureName}.${config.devDomain}`;
-    const previewSection = `## Preview
+    body += `## Preview
 \uD83D\uDD17 ${previewUrl}
 
 `;
-    body = previewSection + body;
+  }
+  if (commits.length > 0) {
+    body += `## Changes
+`;
+    commits.forEach((commit) => {
+      body += `- ${commit}
+`;
+    });
+    body += `
+`;
+  }
+  if (diffStat) {
+    body += `## Summary
+\`\`\`
+${diffStat}
+\`\`\`
+
+`;
   }
   if (!body.includes("Created with zdev")) {
     body = body.trim() + `

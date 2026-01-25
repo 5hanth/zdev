@@ -104,15 +104,36 @@ export async function pr(
     console.log(`   Pushed to origin/${branch}`);
   }
 
+  // Get base branch for comparison
+  const defaultBranch = run("git", ["symbolic-ref", "refs/remotes/origin/HEAD", "--short"], { cwd: worktreePath });
+  const baseBranch = defaultBranch.success ? defaultBranch.stdout.trim().replace("origin/", "") : "main";
+
+  // Get commits since base branch
+  const commitsResult = run("git", ["log", `origin/${baseBranch}..HEAD`, "--pretty=format:%s"], { cwd: worktreePath });
+  const commits = commitsResult.success ? commitsResult.stdout.trim().split("\n").filter(Boolean) : [];
+
+  // Get files changed
+  const filesResult = run("git", ["diff", `origin/${baseBranch}..HEAD`, "--stat", "--stat-width=60"], { cwd: worktreePath });
+  const filesSummary = filesResult.success ? filesResult.stdout.trim() : "";
+
+  // Get short diff summary
+  const diffStatResult = run("git", ["diff", `origin/${baseBranch}..HEAD`, "--shortstat"], { cwd: worktreePath });
+  const diffStat = diffStatResult.success ? diffStatResult.stdout.trim() : "";
+
   // Build PR title
   let title = options.title;
   if (!title) {
-    // Generate from feature name or branch
-    const featureForTitle = featureName || branch.replace(/^feature\//, "");
-    title = featureForTitle
-      .split(/[-_]/)
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(" ");
+    if (commits.length > 0) {
+      // Use first commit message as title
+      title = commits[0];
+    } else {
+      // Fallback to feature name
+      const featureForTitle = featureName || branch.replace(/^feature\//, "");
+      title = featureForTitle
+        .split(/[-_]/)
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(" ");
+    }
   }
 
   // Build PR body
@@ -120,13 +141,25 @@ export async function pr(
   
   // Add preview URL if we have allocation
   if (allocation && allocation.publicUrl) {
-    const previewSection = `## Preview\n🔗 ${allocation.publicUrl}\n\n`;
-    body = previewSection + body;
+    body += `## Preview\n🔗 ${allocation.publicUrl}\n\n`;
   } else if (config.devDomain && featureName && projectName) {
     // Try to construct preview URL
     const previewUrl = `https://${projectName}-${featureName}.${config.devDomain}`;
-    const previewSection = `## Preview\n🔗 ${previewUrl}\n\n`;
-    body = previewSection + body;
+    body += `## Preview\n🔗 ${previewUrl}\n\n`;
+  }
+
+  // Add commits section if we have commits
+  if (commits.length > 0) {
+    body += `## Changes\n`;
+    commits.forEach((commit) => {
+      body += `- ${commit}\n`;
+    });
+    body += "\n";
+  }
+
+  // Add files changed
+  if (diffStat) {
+    body += `## Summary\n\`\`\`\n${diffStat}\n\`\`\`\n\n`;
   }
 
   // Add footer
