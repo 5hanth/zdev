@@ -1,6 +1,6 @@
 {
   "name": "zdev",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Multi-agent worktree development environment for cloud dev with preview URLs",
   "type": "module",
   "bin": {

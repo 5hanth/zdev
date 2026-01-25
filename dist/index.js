@@ -2764,6 +2764,18 @@ Run 'zdev list' to see active features`);
 
 // src/commands/list.ts
 import { existsSync as existsSync6 } from "fs";
+function getTmuxSessions(pattern) {
+  const socketDir = process.env.CLAWDBOT_TMUX_SOCKET_DIR || "/tmp/clawdbot-tmux-sockets";
+  const socket = `${socketDir}/clawdbot.sock`;
+  let result = run("tmux", ["-S", socket, "list-sessions", "-F", "#{session_name}"]);
+  if (!result.success) {
+    result = run("tmux", ["list-sessions", "-F", "#{session_name}"]);
+  }
+  if (!result.success)
+    return [];
+  return result.stdout.split(`
+`).filter(Boolean).filter((name) => name.toLowerCase().includes(pattern.toLowerCase()));
+}
 async function list(options = {}) {
   const config = loadConfig();
   const allocations = Object.entries(config.allocations);
@@ -2798,7 +2810,12 @@ No active features.
     const worktreeExists = existsSync6(worktreePath);
     const frontendRunning = alloc.pids.frontend ? isProcessRunning(alloc.pids.frontend) : false;
     const convexRunning = alloc.pids.convex ? isProcessRunning(alloc.pids.convex) : false;
-    const statusEmoji = frontendRunning && convexRunning ? "\uD83D\uDFE2" : frontendRunning || convexRunning ? "\uD83D\uDFE1" : "\uD83D\uDD34";
+    const featureSlug = name.toLowerCase().replace(/[^a-z0-9]/g, "-");
+    const tmuxSessions = getTmuxSessions(featureSlug);
+    const hasTmux = tmuxSessions.length > 0;
+    const isRunning = frontendRunning || convexRunning || hasTmux;
+    const isFullyRunning = frontendRunning && convexRunning || hasTmux && tmuxSessions.length >= 2;
+    const statusEmoji = isFullyRunning ? "\uD83D\uDFE2" : isRunning ? "\uD83D\uDFE1" : "\uD83D\uDD34";
     console.log(`${statusEmoji} ${name}`);
     console.log(`   Project:  ${alloc.project}`);
     console.log(`   Branch:   ${alloc.branch}`);
@@ -2807,8 +2824,15 @@ No active features.
     if (alloc.funnelPath && traefikStatus.devDomain) {
       console.log(`   Public:   https://${alloc.funnelPath}.${traefikStatus.devDomain}`);
     }
-    console.log(`   Frontend: ${frontendRunning ? `running (PID: ${alloc.pids.frontend})` : "stopped"}`);
-    console.log(`   Convex:   ${convexRunning ? `running (PID: ${alloc.pids.convex})` : "stopped"}`);
+    if (alloc.pids.frontend || alloc.pids.convex) {
+      console.log(`   Frontend: ${frontendRunning ? `running (PID: ${alloc.pids.frontend})` : "stopped"}`);
+      console.log(`   Convex:   ${convexRunning ? `running (PID: ${alloc.pids.convex})` : "stopped"}`);
+    }
+    if (hasTmux) {
+      console.log(`   Tmux:     ${tmuxSessions.join(", ")}`);
+    } else if (!frontendRunning && !convexRunning) {
+      console.log(`   Servers:  stopped`);
+    }
     console.log(`   Started:  ${new Date(alloc.started).toLocaleString()}`);
     console.log();
   }
