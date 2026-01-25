@@ -2773,8 +2773,10 @@ function getTmuxSessions(pattern) {
   }
   if (!result.success)
     return [];
-  return result.stdout.split(`
-`).filter(Boolean).filter((name) => name.toLowerCase().includes(pattern.toLowerCase()));
+  const sessions = result.stdout.split(`
+`).filter(Boolean);
+  const patternWords = pattern.split("-").filter((w) => w.length > 2);
+  return sessions.filter((name) => patternWords.some((word) => name.toLowerCase().includes(word.toLowerCase())));
 }
 async function list(options = {}) {
   const config = loadConfig();
@@ -2811,7 +2813,15 @@ No active features.
     const frontendRunning = alloc.pids.frontend ? isProcessRunning(alloc.pids.frontend) : false;
     const convexRunning = alloc.pids.convex ? isProcessRunning(alloc.pids.convex) : false;
     const featureSlug = name.toLowerCase().replace(/[^a-z0-9]/g, "-");
-    const tmuxSessions = getTmuxSessions(featureSlug);
+    const projectSlug = alloc.project.toLowerCase().replace(/[^a-z0-9]/g, "-");
+    const featureOnly = alloc.branch.replace("feature/", "").toLowerCase().replace(/[^a-z0-9]/g, "-");
+    let tmuxSessions = getTmuxSessions(featureSlug);
+    if (tmuxSessions.length === 0) {
+      tmuxSessions = getTmuxSessions(projectSlug);
+    }
+    if (tmuxSessions.length === 0 && featureOnly !== projectSlug) {
+      tmuxSessions = getTmuxSessions(featureOnly);
+    }
     const hasTmux = tmuxSessions.length > 0;
     const isRunning = frontendRunning || convexRunning || hasTmux;
     const isFullyRunning = frontendRunning && convexRunning || hasTmux && tmuxSessions.length >= 2;

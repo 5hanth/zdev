@@ -22,10 +22,14 @@ function getTmuxSessions(pattern: string): string[] {
   
   if (!result.success) return [];
   
-  return result.stdout
-    .split("\n")
-    .filter(Boolean)
-    .filter(name => name.toLowerCase().includes(pattern.toLowerCase()));
+  const sessions = result.stdout.split("\n").filter(Boolean);
+  
+  // Match if session name contains any word from the pattern
+  const patternWords = pattern.split("-").filter(w => w.length > 2);
+  
+  return sessions.filter(name => 
+    patternWords.some(word => name.toLowerCase().includes(word.toLowerCase()))
+  );
 }
 
 export interface ListOptions {
@@ -74,8 +78,18 @@ export async function list(options: ListOptions = {}): Promise<void> {
       : false;
     
     // Check for tmux sessions related to this feature
+    // Try multiple patterns: full name, project name, feature name
     const featureSlug = name.toLowerCase().replace(/[^a-z0-9]/g, "-");
-    const tmuxSessions = getTmuxSessions(featureSlug);
+    const projectSlug = alloc.project.toLowerCase().replace(/[^a-z0-9]/g, "-");
+    const featureOnly = alloc.branch.replace("feature/", "").toLowerCase().replace(/[^a-z0-9]/g, "-");
+    
+    let tmuxSessions = getTmuxSessions(featureSlug);
+    if (tmuxSessions.length === 0) {
+      tmuxSessions = getTmuxSessions(projectSlug);
+    }
+    if (tmuxSessions.length === 0 && featureOnly !== projectSlug) {
+      tmuxSessions = getTmuxSessions(featureOnly);
+    }
     const hasTmux = tmuxSessions.length > 0;
     
     const isRunning = frontendRunning || convexRunning || hasTmux;
