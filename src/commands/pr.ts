@@ -120,21 +120,90 @@ export async function pr(
   const diffStatResult = run("git", ["diff", `origin/${baseBranch}..HEAD`, "--shortstat"], { cwd: worktreePath });
   const diffStat = diffStatResult.success ? diffStatResult.stdout.trim() : "";
 
+  // Get changed files for smart title generation
+  const changedFilesResult = run("git", ["diff", `origin/${baseBranch}..HEAD`, "--name-only"], { cwd: worktreePath });
+  const changedFiles = changedFilesResult.success ? changedFilesResult.stdout.trim().split("\n").filter(Boolean) : [];
+
   // Build PR title
   let title = options.title;
   if (!title) {
-    if (commits.length > 0) {
-      // Use first commit message as title
-      title = commits[0];
-    } else {
-      // Fallback to feature name
-      const featureForTitle = featureName || branch.replace(/^feature\//, "");
-      title = featureForTitle
-        .split(/[-_]/)
-        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(" ");
+    // Try to generate smart title from changed files
+    title = generateSmartTitle(changedFiles, commits, featureName || branch.replace(/^feature\//, ""));
+  }
+}
+
+/**
+ * Generate a smart PR title based on changed files and commits
+ */
+function generateSmartTitle(files: string[], commits: string[], featureName: string): string {
+  // Extract meaningful names from file paths
+  const components = new Set<string>();
+  const areas = new Set<string>();
+  
+  for (const file of files) {
+    // Skip non-code files
+    if (!file.match(/\.(tsx?|jsx?|css|scss)$/)) continue;
+    
+    // Extract component names from paths like src/components/OrderCard.tsx
+    const componentMatch = file.match(/components\/([^/]+)\/([^/]+)\.(tsx?|jsx?)$/);
+    if (componentMatch) {
+      components.add(componentMatch[2].replace(/\.(tsx?|jsx?)$/, ""));
+      continue;
+    }
+    
+    // Single component file
+    const singleComponent = file.match(/components\/([^/]+)\.(tsx?|jsx?)$/);
+    if (singleComponent) {
+      components.add(singleComponent[1]);
+      continue;
+    }
+    
+    // Routes
+    const routeMatch = file.match(/routes\/(.+)\.(tsx?|jsx?)$/);
+    if (routeMatch) {
+      const routeName = routeMatch[1].replace(/[[\]$_.]/g, " ").trim();
+      if (routeName && routeName !== "index") {
+        areas.add(routeName);
+      }
+      continue;
+    }
+    
+    // Other meaningful paths
+    const pathParts = file.split("/");
+    if (pathParts.length > 1) {
+      const folder = pathParts[pathParts.length - 2];
+      if (!["src", "web", "app", "lib", "utils"].includes(folder)) {
+        areas.add(folder);
+      }
     }
   }
+  
+  // Build title from components/areas
+  const items = [...components, ...areas].slice(0, 3);
+  
+  if (items.length > 0) {
+    // Determine action from commits
+    let action = "Update";
+    const commitText = commits.join(" ").toLowerCase();
+    if (commitText.includes("fix")) action = "Fix";
+    else if (commitText.includes("add") || commitText.includes("new")) action = "Add";
+    else if (commitText.includes("refactor")) action = "Refactor";
+    else if (commitText.includes("improve") || commitText.includes("enhance")) action = "Improve";
+    else if (commitText.includes("mobile") || commitText.includes("responsive")) action = "Improve";
+    
+    return `${action} ${items.join(", ")}`;
+  }
+  
+  // Fallback: use first commit or feature name
+  if (commits.length > 0 && commits[0].length < 72) {
+    return commits[0];
+  }
+  
+  // Final fallback: humanize feature name
+  return featureName
+    .split(/[-_]/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 
   // Build PR body
   let body = options.body || "";
