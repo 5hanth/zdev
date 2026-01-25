@@ -134,12 +134,14 @@ program
   .option("-b, --body <body>", "PR body (preview URL auto-added)")
   .option("-d, --draft", "Create as draft PR")
   .option("-w, --web", "Open in browser instead of CLI")
+  .option("--ai", "Use Claude to generate title and description from diff")
   .action(async (feature, options) => {
     await pr(feature, options.project, {
       title: options.title,
       body: options.body,
       draft: options.draft,
       web: options.web,
+      ai: options.ai,
     });
   });
 

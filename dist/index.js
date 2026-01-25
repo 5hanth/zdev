@@ -475,11 +475,11 @@ var require_option = __commonJS((exports) => {
   }
 
   class DualOptions {
-    constructor(options2) {
+    constructor(options) {
       this.positiveOptions = new Map;
       this.negativeOptions = new Map;
       this.dualOptions = new Set;
-      options2.forEach((option) => {
+      options.forEach((option) => {
         if (option.negate) {
           this.negativeOptions.set(option.attributeName(), option);
         } else {
@@ -940,12 +940,12 @@ Expecting one of '${allowedValues.join("', '")}'`);
       }
       return this;
     }
-    _optionEx(config2, flags, description, fn, defaultValue) {
+    _optionEx(config, flags, description, fn, defaultValue) {
       if (typeof flags === "object" && flags instanceof Option) {
         throw new Error("To add an Option object use addOption() instead of option() or requiredOption()");
       }
       const option = this.createOption(flags, description);
-      option.makeOptionMandatory(!!config2.mandatory);
+      option.makeOptionMandatory(!!config.mandatory);
       if (typeof fn === "function") {
         option.default(defaultValue).argParser(fn);
       } else if (fn instanceof RegExp) {
@@ -1514,9 +1514,9 @@ Expecting one of '${allowedValues.join("', '")}'`);
 `);
         this.outputHelp({ error: true });
       }
-      const config2 = errorOptions || {};
-      const exitCode = config2.exitCode || 1;
-      const code = config2.code || "commander.error";
+      const config = errorOptions || {};
+      const exitCode = config.exitCode || 1;
+      const code = config.code || "commander.error";
       this._exit(exitCode, code, message);
     }
     _parseOptionsEnv() {
@@ -1929,32 +1929,32 @@ function loadConfig() {
     return DEFAULT_CONFIG;
   }
 }
-function saveConfig(config2) {
+function saveConfig(config) {
   ensurezdevDirs();
-  writeFileSync(CONFIG_PATH, JSON.stringify(config2, null, 2));
+  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
 }
-function allocatePorts(config2, includeConvex = true) {
-  const frontend = config2.nextFrontendPort;
-  config2.nextFrontendPort = frontend + 1;
+function allocatePorts(config, includeConvex = true) {
+  const frontend = config.nextFrontendPort;
+  config.nextFrontendPort = frontend + 1;
   let convex = 0;
   if (includeConvex) {
-    convex = config2.nextConvexPort;
-    config2.nextConvexPort = convex + 1;
+    convex = config.nextConvexPort;
+    config.nextConvexPort = convex + 1;
   }
   return { frontend, convex };
 }
 function getWorktreePath(name) {
   return join(WORKTREES_DIR, name);
 }
-function getSeedPath(projectName2) {
-  return join(SEEDS_DIR, `${projectName2}.zip`);
+function getSeedPath(projectName) {
+  return join(SEEDS_DIR, `${projectName}.zip`);
 }
 
 // src/utils.ts
-function run(command, args, options2) {
+function run(command, args, options) {
   const result = spawnSync(command, args, {
     encoding: "utf-8",
-    ...options2
+    ...options
   });
   return {
     success: result.status === 0,
@@ -1963,11 +1963,11 @@ function run(command, args, options2) {
     code: result.status
   };
 }
-function runBackground(command, args, options2) {
+function runBackground(command, args, options) {
   const child = spawn(command, args, {
     detached: true,
     stdio: "ignore",
-    ...options2
+    ...options
   });
   child.unref();
   return child.pid;
@@ -1989,15 +1989,15 @@ function gitFetch(repoPath) {
   const result = run("git", ["fetch", "origin"], { cwd: repoPath });
   return result.success;
 }
-function createWorktree(repoPath, worktreePath2, branch2, baseBranch = "origin/main") {
-  const result = run("git", ["worktree", "add", worktreePath2, "-b", branch2, baseBranch], { cwd: repoPath });
+function createWorktree(repoPath, worktreePath, branch, baseBranch = "origin/main") {
+  const result = run("git", ["worktree", "add", worktreePath, "-b", branch, baseBranch], { cwd: repoPath });
   if (!result.success) {
     return { success: false, error: result.stderr };
   }
   return { success: true };
 }
-function removeWorktree(repoPath, worktreePath2) {
-  const result = run("git", ["worktree", "remove", worktreePath2, "--force"], {
+function removeWorktree(repoPath, worktreePath) {
+  const result = run("git", ["worktree", "remove", worktreePath, "--force"], {
     cwd: repoPath
   });
   if (!result.success) {
@@ -2007,14 +2007,14 @@ function removeWorktree(repoPath, worktreePath2) {
   return { success: true };
 }
 function traefikAddRoute(name, port) {
-  const config2 = loadConfig();
-  const configPath = `${config2.traefikConfigDir}/${name}.yml`;
+  const config = loadConfig();
+  const configPath = `${config.traefikConfigDir}/${name}.yml`;
   const subdomain = name;
   const traefikConfig = `# zdev auto-generated config for ${name}
 http:
   routers:
     ${name}:
-      rule: "Host(\`${subdomain}.${config2.devDomain}\`)"
+      rule: "Host(\`${subdomain}.${config.devDomain}\`)"
       entrypoints:
         - websecure
       service: ${name}
@@ -2025,7 +2025,7 @@ http:
     ${name}:
       loadBalancer:
         servers:
-          - url: "http://${config2.dockerHostIp}:${port}"
+          - url: "http://${config.dockerHostIp}:${port}"
 `;
   try {
     writeFileSync2(configPath, traefikConfig);
@@ -2047,15 +2047,15 @@ function traefikRemoveRoute(name) {
   }
 }
 function getTraefikStatus() {
-  const config2 = loadConfig();
-  if (!config2.devDomain) {
+  const config = loadConfig();
+  if (!config.devDomain) {
     return { running: false, devDomain: undefined };
   }
-  const configDirExists = existsSync2(config2.traefikConfigDir);
+  const configDirExists = existsSync2(config.traefikConfigDir);
   return {
     running: configDirExists,
-    baseUrl: configDirExists ? `https://*.${config2.devDomain}` : undefined,
-    devDomain: config2.devDomain
+    baseUrl: configDirExists ? `https://*.${config.devDomain}` : undefined,
+    devDomain: config.devDomain
   };
 }
 function killProcess(pid) {
@@ -2238,22 +2238,22 @@ bun install
 # bunx prisma generate
 # cp ../.env.local .
 `;
-async function create(projectName2, options2 = {}) {
-  const targetPath = resolve2(projectName2);
+async function create(projectName, options = {}) {
+  const targetPath = resolve2(projectName);
   if (existsSync3(targetPath)) {
     console.error(`❌ Directory already exists: ${targetPath}`);
     process.exit(1);
   }
-  console.log(`\uD83D\uDC02 Creating new project: ${projectName2}`);
-  console.log(`   Convex: ${options2.convex ? "yes" : "no"}`);
-  console.log(`   Structure: ${options2.flat ? "flat" : "monorepo"}`);
+  console.log(`\uD83D\uDC02 Creating new project: ${projectName}`);
+  console.log(`   Convex: ${options.convex ? "yes" : "no"}`);
+  console.log(`   Structure: ${options.flat ? "flat" : "monorepo"}`);
   console.log(`
 \uD83D\uDCE5 Cloning TanStack Start template...`);
   const cloneResult = run("npx", [
     "-y",
     "gitpick",
     "TanStack/router/tree/main/examples/react/start-basic",
-    projectName2
+    projectName
   ]);
   if (!cloneResult.success) {
     console.error(`❌ Failed to clone template: ${cloneResult.stderr}`);
@@ -2261,7 +2261,7 @@ async function create(projectName2, options2 = {}) {
   }
   console.log(`   Template cloned`);
   let webPath;
-  if (options2.flat) {
+  if (options.flat) {
     webPath = targetPath;
   } else {
     console.log(`
@@ -2278,7 +2278,7 @@ async function create(projectName2, options2 = {}) {
     renameSync(tempDir, webDir);
     webPath = webDir;
     const rootPackageJson = {
-      name: projectName2,
+      name: projectName,
       private: true,
       workspaces: ["web"],
       scripts: {
@@ -2324,12 +2324,12 @@ async function create(projectName2, options2 = {}) {
   const pkgPath = join2(webPath, "package.json");
   if (existsSync3(pkgPath)) {
     const pkg = JSON.parse(readFileSync2(pkgPath, "utf-8"));
-    pkg.name = options2.flat ? projectName2 : `${projectName2}-web`;
+    pkg.name = options.flat ? projectName : `${projectName}-web`;
     pkg.dependencies = pkg.dependencies || {};
     pkg.dependencies["agentation"] = "latest";
     writeFileSync3(pkgPath, JSON.stringify(pkg, null, 2));
   }
-  if (options2.convex) {
+  if (options.convex) {
     console.log(`
 \uD83D\uDD27 Setting up Convex...`);
     const addResult = run("bun", ["add", "convex", "convex-react"], { cwd: webPath });
@@ -2353,7 +2353,7 @@ async function create(projectName2, options2 = {}) {
     console.log(`   Created .env.local.example`);
     console.log(`
    ⚠️  To complete Convex setup:`);
-    console.log(`      1. cd ${options2.flat ? projectName2 : projectName2 + "/web"}`);
+    console.log(`      1. cd ${options.flat ? projectName : projectName + "/web"}`);
     console.log(`      2. bunx convex dev  (select/create project)`);
     console.log(`      3. Wrap your app with <ConvexClientProvider> in app/root.tsx`);
   }
@@ -2380,16 +2380,16 @@ async function create(projectName2, options2 = {}) {
   console.log(`   Git initialized`);
   console.log(`
 ${"-".repeat(50)}`);
-  console.log(`✅ Project "${projectName2}" created!
+  console.log(`✅ Project "${projectName}" created!
 `);
   console.log(`\uD83D\uDCC1 Location: ${targetPath}`);
   console.log(`
 \uD83D\uDCDD Next steps:`);
-  console.log(`   cd ${projectName2}`);
-  if (!options2.flat) {
+  console.log(`   cd ${projectName}`);
+  if (!options.flat) {
     console.log(`   cd web`);
   }
-  if (options2.convex) {
+  if (options.convex) {
     console.log(`   bunx convex dev    # Setup Convex project`);
   }
   console.log(`   bun dev            # Start dev server`);
@@ -2399,7 +2399,7 @@ ${"-".repeat(50)}`);
 // src/commands/init.ts
 import { existsSync as existsSync4, mkdirSync as mkdirSync3, writeFileSync as writeFileSync4, readFileSync as readFileSync3 } from "fs";
 import { resolve as resolve3 } from "path";
-async function init(projectPath = ".", options2 = {}) {
+async function init(projectPath = ".", options = {}) {
   const fullPath = resolve3(projectPath);
   if (!existsSync4(fullPath)) {
     console.error(`❌ Path does not exist: ${fullPath}`);
@@ -2434,7 +2434,7 @@ async function init(projectPath = ".", options2 = {}) {
       console.log(`   Added .zdev/ to .gitignore`);
     }
   }
-  if (options2.seed) {
+  if (options.seed) {
     console.log(`
 \uD83D\uDCE6 Creating seed data...`);
     const convexDir = resolve3(fullPath, "convex");
@@ -2463,20 +2463,20 @@ Next steps:`);
 // src/commands/start.ts
 import { existsSync as existsSync5, readFileSync as readFileSync4, writeFileSync as writeFileSync5 } from "fs";
 import { resolve as resolve4, basename as basename3, join as join3 } from "path";
-function detectWebDir(worktreePath2) {
+function detectWebDir(worktreePath) {
   const commonDirs = ["web", "frontend", "app", "client", "packages/web", "apps/web"];
   for (const dir of commonDirs) {
-    const packagePath = join3(worktreePath2, dir, "package.json");
+    const packagePath = join3(worktreePath, dir, "package.json");
     if (existsSync5(packagePath)) {
       return dir;
     }
   }
-  if (existsSync5(join3(worktreePath2, "package.json"))) {
+  if (existsSync5(join3(worktreePath, "package.json"))) {
     return ".";
   }
   return "web";
 }
-async function start(featureName, projectPath = ".", options2 = {}) {
+async function start(featureName, projectPath = ".", options = {}) {
   const fullPath = resolve4(projectPath);
   if (!existsSync5(fullPath)) {
     console.error(`❌ Path does not exist: ${fullPath}`);
@@ -2488,9 +2488,9 @@ async function start(featureName, projectPath = ".", options2 = {}) {
   }
   const repoName = getRepoName(fullPath);
   const worktreeName = `${repoName}-${featureName}`;
-  const worktreePath2 = getWorktreePath(worktreeName);
+  const worktreePath = getWorktreePath(worktreeName);
   const branchName = `feature/${featureName}`;
-  let baseBranch = options2.baseBranch;
+  let baseBranch = options.baseBranch;
   if (!baseBranch) {
     const candidates = ["origin/main", "origin/master", "main", "master"];
     for (const candidate of candidates) {
@@ -2508,8 +2508,8 @@ async function start(featureName, projectPath = ".", options2 = {}) {
   console.log(`\uD83D\uDC02 Starting feature: ${featureName}`);
   console.log(`   Project: ${repoName}`);
   console.log(`   Branch: ${branchName}`);
-  const config2 = loadConfig();
-  if (config2.allocations[worktreeName]) {
+  const config = loadConfig();
+  if (config.allocations[worktreeName]) {
     console.error(`
 ❌ Feature "${featureName}" already exists for ${repoName}`);
     console.log(`   Run: zdev stop ${featureName} --project ${fullPath}`);
@@ -2525,25 +2525,25 @@ async function start(featureName, projectPath = ".", options2 = {}) {
   }
   console.log(`
 \uD83C\uDF33 Creating worktree...`);
-  if (existsSync5(worktreePath2)) {
-    console.error(`   Worktree path already exists: ${worktreePath2}`);
+  if (existsSync5(worktreePath)) {
+    console.error(`   Worktree path already exists: ${worktreePath}`);
     process.exit(1);
   }
-  const worktreeResult = createWorktree(fullPath, worktreePath2, branchName, baseBranch);
+  const worktreeResult = createWorktree(fullPath, worktreePath, branchName, baseBranch);
   if (!worktreeResult.success) {
     console.error(`   Failed to create worktree: ${worktreeResult.error}`);
     process.exit(1);
   }
-  console.log(`   Created: ${worktreePath2}`);
-  const webDir = options2.webDir || detectWebDir(worktreePath2);
-  const webPath = webDir === "." ? worktreePath2 : join3(worktreePath2, webDir);
+  console.log(`   Created: ${worktreePath}`);
+  const webDir = options.webDir || detectWebDir(worktreePath);
+  const webPath = webDir === "." ? worktreePath : join3(worktreePath, webDir);
   console.log(`
 \uD83D\uDCC1 Web directory: ${webDir === "." ? "(root)" : webDir}`);
-  if (config2.copyPatterns && config2.copyPatterns.length > 0) {
+  if (config.copyPatterns && config.copyPatterns.length > 0) {
     console.log(`
 \uD83D\uDCCB Copying config files...`);
     const mainWebPath = webDir === "." ? fullPath : join3(fullPath, webDir);
-    for (const pattern of config2.copyPatterns) {
+    for (const pattern of config.copyPatterns) {
       const srcPath = join3(mainWebPath, pattern);
       const destPath = join3(webPath, pattern);
       if (existsSync5(srcPath) && !existsSync5(destPath)) {
@@ -2557,7 +2557,7 @@ async function start(featureName, projectPath = ".", options2 = {}) {
       }
     }
   }
-  const setupScriptPath = join3(worktreePath2, ".zdev", "setup.sh");
+  const setupScriptPath = join3(worktreePath, ".zdev", "setup.sh");
   if (existsSync5(setupScriptPath)) {
     console.log(`
 \uD83D\uDCE6 Running setup script...`);
@@ -2572,9 +2572,9 @@ async function start(featureName, projectPath = ".", options2 = {}) {
 ⚠️  No .zdev/setup.sh found, skipping setup`);
     console.log(`   Create one in your project to automate dependency installation`);
   }
-  const hasConvex = existsSync5(join3(webPath, "convex")) || existsSync5(join3(worktreePath2, "convex"));
+  const hasConvex = existsSync5(join3(webPath, "convex")) || existsSync5(join3(worktreePath, "convex"));
   const seedPath = getSeedPath(repoName);
-  if (options2.seed && hasConvex && existsSync5(seedPath)) {
+  if (options.seed && hasConvex && existsSync5(seedPath)) {
     console.log(`
 \uD83C\uDF31 Importing seed data...`);
     const seedResult = run("bunx", ["convex", "import", seedPath], {
@@ -2586,7 +2586,7 @@ async function start(featureName, projectPath = ".", options2 = {}) {
       console.error(`   Failed to import seed: ${seedResult.stderr}`);
     }
   }
-  const ports = options2.port ? { frontend: options2.port, convex: hasConvex ? options2.port + 100 : 0 } : allocatePorts(config2, hasConvex);
+  const ports = options.port ? { frontend: options.port, convex: hasConvex ? options.port + 100 : 0 } : allocatePorts(config, hasConvex);
   console.log(`
 \uD83D\uDD0C Allocated ports:`);
   console.log(`   Frontend: ${ports.frontend}`);
@@ -2636,7 +2636,7 @@ async function start(featureName, projectPath = ".", options2 = {}) {
   console.log(`   Frontend PID: ${frontendPid}`);
   let routePath = "";
   let publicUrl = "";
-  if (!options2.local) {
+  if (!options.local) {
     const traefikStatus = getTraefikStatus();
     if (traefikStatus.running && traefikStatus.devDomain) {
       routePath = worktreeName;
@@ -2655,7 +2655,7 @@ async function start(featureName, projectPath = ".", options2 = {}) {
       console.log(`   Run: zdev config --set devDomain=dev.yourdomain.com`);
     }
   }
-  const allocation2 = {
+  const allocation = {
     project: repoName,
     projectPath: fullPath,
     branch: branchName,
@@ -2663,7 +2663,7 @@ async function start(featureName, projectPath = ".", options2 = {}) {
     frontendPort: ports.frontend,
     convexPort: ports.convex,
     funnelPath: routePath,
-    worktreePath: worktreePath2,
+    worktreePath,
     publicUrl: publicUrl || undefined,
     pids: {
       frontend: frontendPid,
@@ -2671,104 +2671,104 @@ async function start(featureName, projectPath = ".", options2 = {}) {
     },
     started: new Date().toISOString()
   };
-  config2.allocations[worktreeName] = allocation2;
-  saveConfig(config2);
+  config.allocations[worktreeName] = allocation;
+  saveConfig(config);
   console.log(`
 ${"-".repeat(50)}`);
   console.log(`✅ Feature "${featureName}" is ready!
 `);
-  console.log(`\uD83D\uDCC1 Worktree: ${worktreePath2}`);
+  console.log(`\uD83D\uDCC1 Worktree: ${worktreePath}`);
   console.log(`\uD83C\uDF10 Local:    http://localhost:${ports.frontend}`);
   if (publicUrl) {
     console.log(`\uD83D\uDD17 Public:   ${publicUrl}`);
   }
   console.log(`
 \uD83D\uDCDD Commands:`);
-  console.log(`   cd ${worktreePath2}`);
+  console.log(`   cd ${worktreePath}`);
   console.log(`   zdev stop ${featureName} --project ${fullPath}`);
   console.log(`${"-".repeat(50)}`);
 }
 
 // src/commands/stop.ts
 import { resolve as resolve5 } from "path";
-async function stop(featureName, options2 = {}) {
-  const config2 = loadConfig();
+async function stop(featureName, options = {}) {
+  const config = loadConfig();
   let worktreeName;
-  let allocation2;
-  if (options2.project) {
-    const projectPath = resolve5(options2.project);
-    const repoName = isGitRepo(projectPath) ? getRepoName(projectPath) : options2.project;
+  let allocation;
+  if (options.project) {
+    const projectPath = resolve5(options.project);
+    const repoName = isGitRepo(projectPath) ? getRepoName(projectPath) : options.project;
     worktreeName = `${repoName}-${featureName}`;
-    allocation2 = config2.allocations[worktreeName];
+    allocation = config.allocations[worktreeName];
   } else {
-    for (const [name, alloc] of Object.entries(config2.allocations)) {
+    for (const [name, alloc] of Object.entries(config.allocations)) {
       if (name.endsWith(`-${featureName}`)) {
         worktreeName = name;
-        allocation2 = alloc;
+        allocation = alloc;
         break;
       }
     }
   }
-  if (!worktreeName || !allocation2) {
+  if (!worktreeName || !allocation) {
     console.error(`❌ Feature "${featureName}" not found`);
     console.log(`
 Run 'zdev list' to see active features`);
     process.exit(1);
   }
   console.log(`\uD83D\uDC02 Stopping feature: ${featureName}`);
-  console.log(`   Project: ${allocation2.project}`);
-  if (allocation2.pids.frontend && isProcessRunning(allocation2.pids.frontend)) {
+  console.log(`   Project: ${allocation.project}`);
+  if (allocation.pids.frontend && isProcessRunning(allocation.pids.frontend)) {
     console.log(`
-\uD83D\uDED1 Stopping frontend (PID: ${allocation2.pids.frontend})...`);
-    if (killProcess(allocation2.pids.frontend)) {
+\uD83D\uDED1 Stopping frontend (PID: ${allocation.pids.frontend})...`);
+    if (killProcess(allocation.pids.frontend)) {
       console.log(`   Frontend stopped`);
     } else {
       console.error(`   Failed to stop frontend`);
     }
   }
-  if (allocation2.pids.convex && isProcessRunning(allocation2.pids.convex)) {
+  if (allocation.pids.convex && isProcessRunning(allocation.pids.convex)) {
     console.log(`
-\uD83D\uDED1 Stopping Convex (PID: ${allocation2.pids.convex})...`);
-    if (killProcess(allocation2.pids.convex)) {
+\uD83D\uDED1 Stopping Convex (PID: ${allocation.pids.convex})...`);
+    if (killProcess(allocation.pids.convex)) {
       console.log(`   Convex stopped`);
     } else {
       console.error(`   Failed to stop Convex`);
     }
   }
-  if (allocation2.funnelPath) {
+  if (allocation.funnelPath) {
     console.log(`
 \uD83D\uDD17 Removing Traefik route...`);
-    if (traefikRemoveRoute(allocation2.funnelPath)) {
+    if (traefikRemoveRoute(allocation.funnelPath)) {
       console.log(`   Route removed`);
     } else {
       console.error(`   Failed to remove route (may already be removed)`);
     }
   }
-  delete config2.allocations[worktreeName];
-  saveConfig(config2);
-  const worktreePath2 = getWorktreePath(worktreeName);
-  if (options2.keep) {
+  delete config.allocations[worktreeName];
+  saveConfig(config);
+  const worktreePath = getWorktreePath(worktreeName);
+  if (options.keep) {
     console.log(`
 ✅ Feature "${featureName}" stopped (worktree kept)`);
-    console.log(`   Worktree: ${worktreePath2}`);
+    console.log(`   Worktree: ${worktreePath}`);
     console.log(`
    To remove worktree: zdev clean ${featureName}`);
   } else {
     console.log(`
 ✅ Feature "${featureName}" stopped`);
     console.log(`
-   Worktree still exists at: ${worktreePath2}`);
-    console.log(`   To remove: zdev clean ${featureName} --project ${allocation2.projectPath}`);
+   Worktree still exists at: ${worktreePath}`);
+    console.log(`   To remove: zdev clean ${featureName} --project ${allocation.projectPath}`);
   }
 }
 
 // src/commands/list.ts
 import { existsSync as existsSync6 } from "fs";
-async function list(options2 = {}) {
-  const config2 = loadConfig();
-  const allocations = Object.entries(config2.allocations);
-  if (options2.json) {
-    console.log(JSON.stringify(config2, null, 2));
+async function list(options = {}) {
+  const config = loadConfig();
+  const allocations = Object.entries(config.allocations);
+  if (options.json) {
+    console.log(JSON.stringify(config, null, 2));
     return;
   }
   console.log(`\uD83D\uDC02 zdev Status
@@ -2794,15 +2794,15 @@ No active features.
 \uD83D\uDCCB Active Features (${allocations.length}):
 `);
   for (const [name, alloc] of allocations) {
-    const worktreePath2 = getWorktreePath(name);
-    const worktreeExists = existsSync6(worktreePath2);
+    const worktreePath = getWorktreePath(name);
+    const worktreeExists = existsSync6(worktreePath);
     const frontendRunning = alloc.pids.frontend ? isProcessRunning(alloc.pids.frontend) : false;
     const convexRunning = alloc.pids.convex ? isProcessRunning(alloc.pids.convex) : false;
     const statusEmoji = frontendRunning && convexRunning ? "\uD83D\uDFE2" : frontendRunning || convexRunning ? "\uD83D\uDFE1" : "\uD83D\uDD34";
     console.log(`${statusEmoji} ${name}`);
     console.log(`   Project:  ${alloc.project}`);
     console.log(`   Branch:   ${alloc.branch}`);
-    console.log(`   Path:     ${worktreePath2} ${worktreeExists ? "" : "(missing)"}`);
+    console.log(`   Path:     ${worktreePath} ${worktreeExists ? "" : "(missing)"}`);
     console.log(`   Local:    http://localhost:${alloc.frontendPort}`);
     if (alloc.funnelPath && traefikStatus.devDomain) {
       console.log(`   Public:   https://${alloc.funnelPath}.${traefikStatus.devDomain}`);
@@ -2822,27 +2822,27 @@ Commands:`);
 // src/commands/clean.ts
 import { existsSync as existsSync7, rmSync as rmSync2 } from "fs";
 import { resolve as resolve6 } from "path";
-async function clean(featureName, options2 = {}) {
-  const config2 = loadConfig();
+async function clean(featureName, options = {}) {
+  const config = loadConfig();
   let worktreeName;
-  let allocation2;
+  let allocation;
   let projectPath;
-  if (options2.project) {
-    projectPath = resolve6(options2.project);
-    const repoName = isGitRepo(projectPath) ? getRepoName(projectPath) : options2.project;
+  if (options.project) {
+    projectPath = resolve6(options.project);
+    const repoName = isGitRepo(projectPath) ? getRepoName(projectPath) : options.project;
     worktreeName = `${repoName}-${featureName}`;
-    allocation2 = config2.allocations[worktreeName];
+    allocation = config.allocations[worktreeName];
   } else {
-    for (const [name, alloc] of Object.entries(config2.allocations)) {
+    for (const [name, alloc] of Object.entries(config.allocations)) {
       if (name.endsWith(`-${featureName}`)) {
         worktreeName = name;
-        allocation2 = alloc;
+        allocation = alloc;
         projectPath = alloc.projectPath;
         break;
       }
     }
     if (!worktreeName) {
-      const entries = Object.keys(config2.allocations);
+      const entries = Object.keys(config.allocations);
       console.error(`❌ Feature "${featureName}" not found in active allocations`);
       if (entries.length > 0) {
         console.log(`
@@ -2852,41 +2852,41 @@ Active features:`);
       process.exit(1);
     }
   }
-  const worktreePath2 = getWorktreePath(worktreeName);
+  const worktreePath = getWorktreePath(worktreeName);
   console.log(`\uD83D\uDC02 Cleaning feature: ${featureName}`);
-  if (allocation2) {
-    if (allocation2.pids.frontend && isProcessRunning(allocation2.pids.frontend)) {
+  if (allocation) {
+    if (allocation.pids.frontend && isProcessRunning(allocation.pids.frontend)) {
       console.log(`
 \uD83D\uDED1 Stopping frontend...`);
-      killProcess(allocation2.pids.frontend);
+      killProcess(allocation.pids.frontend);
     }
-    if (allocation2.pids.convex && isProcessRunning(allocation2.pids.convex)) {
+    if (allocation.pids.convex && isProcessRunning(allocation.pids.convex)) {
       console.log(`\uD83D\uDED1 Stopping Convex...`);
-      killProcess(allocation2.pids.convex);
+      killProcess(allocation.pids.convex);
     }
-    if (allocation2.funnelPath) {
+    if (allocation.funnelPath) {
       console.log(`\uD83D\uDD17 Removing Traefik route...`);
-      traefikRemoveRoute(allocation2.funnelPath);
+      traefikRemoveRoute(allocation.funnelPath);
     }
-    projectPath = allocation2.projectPath;
+    projectPath = allocation.projectPath;
   }
-  if (existsSync7(worktreePath2)) {
+  if (existsSync7(worktreePath)) {
     console.log(`
 \uD83D\uDDD1️  Removing worktree...`);
     if (projectPath && isGitRepo(projectPath)) {
-      const result = removeWorktree(projectPath, worktreePath2);
+      const result = removeWorktree(projectPath, worktreePath);
       if (!result.success) {
-        if (options2.force) {
+        if (options.force) {
           console.log(`   Git worktree remove failed, force removing directory...`);
-          rmSync2(worktreePath2, { recursive: true, force: true });
+          rmSync2(worktreePath, { recursive: true, force: true });
         } else {
           console.error(`   Failed to remove worktree: ${result.error}`);
           console.log(`   Use --force to force remove`);
           process.exit(1);
         }
       }
-    } else if (options2.force) {
-      rmSync2(worktreePath2, { recursive: true, force: true });
+    } else if (options.force) {
+      rmSync2(worktreePath, { recursive: true, force: true });
     } else {
       console.error(`   Cannot remove worktree: project path unknown`);
       console.log(`   Use --force to force remove, or specify --project`);
@@ -2897,9 +2897,9 @@ Active features:`);
     console.log(`
    Worktree already removed`);
   }
-  if (worktreeName && config2.allocations[worktreeName]) {
-    delete config2.allocations[worktreeName];
-    saveConfig(config2);
+  if (worktreeName && config.allocations[worktreeName]) {
+    delete config.allocations[worktreeName];
+    saveConfig(config);
   }
   console.log(`
 ✅ Feature "${featureName}" cleaned up`);
@@ -2908,7 +2908,7 @@ Active features:`);
 // src/commands/seed.ts
 import { existsSync as existsSync8 } from "fs";
 import { resolve as resolve7 } from "path";
-async function seedExport(projectPath = ".", options2 = {}) {
+async function seedExport(projectPath = ".", options = {}) {
   const fullPath = resolve7(projectPath);
   if (!existsSync8(fullPath)) {
     console.error(`❌ Path does not exist: ${fullPath}`);
@@ -2935,7 +2935,7 @@ async function seedExport(projectPath = ".", options2 = {}) {
     process.exit(1);
   }
 }
-async function seedImport(projectPath = ".", options2 = {}) {
+async function seedImport(projectPath = ".", options = {}) {
   const fullPath = resolve7(projectPath);
   if (!existsSync8(fullPath)) {
     console.error(`❌ Path does not exist: ${fullPath}`);
@@ -2945,8 +2945,8 @@ async function seedImport(projectPath = ".", options2 = {}) {
   const projectConfigPath = resolve7(fullPath, ".zdev", "project.json");
   if (existsSync8(projectConfigPath)) {
     try {
-      const config2 = JSON.parse(await Bun.file(projectConfigPath).text());
-      repoName = config2.name;
+      const config = JSON.parse(await Bun.file(projectConfigPath).text());
+      repoName = config.name;
     } catch {
       repoName = getRepoName(fullPath);
     }
@@ -2981,10 +2981,10 @@ async function seedImport(projectPath = ".", options2 = {}) {
 }
 
 // src/commands/config.ts
-async function configCmd(options2 = {}) {
-  const config2 = loadConfig();
-  if (options2.set) {
-    const [key, ...valueParts] = options2.set.split("=");
+async function configCmd(options = {}) {
+  const config = loadConfig();
+  if (options.set) {
+    const [key, ...valueParts] = options.set.split("=");
     const value = valueParts.join("=");
     if (!value) {
       console.error(`Usage: zdev config --set key=value`);
@@ -2996,35 +2996,35 @@ Configurable keys:`);
       return;
     }
     if (key === "devDomain") {
-      config2.devDomain = value;
-      saveConfig(config2);
+      config.devDomain = value;
+      saveConfig(config);
       console.log(`✅ Set devDomain = ${value}`);
     } else if (key === "dockerHostIp") {
-      config2.dockerHostIp = value;
-      saveConfig(config2);
+      config.dockerHostIp = value;
+      saveConfig(config);
       console.log(`✅ Set dockerHostIp = ${value}`);
     } else if (key === "traefikConfigDir") {
-      config2.traefikConfigDir = value;
-      saveConfig(config2);
+      config.traefikConfigDir = value;
+      saveConfig(config);
       console.log(`✅ Set traefikConfigDir = ${value}`);
     } else {
       console.error(`Unknown config key: ${key}`);
     }
     return;
   }
-  if (options2.list || !options2.add && !options2.remove) {
+  if (options.list || !options.add && !options.remove) {
     console.log(`\uD83D\uDC02 zdev Configuration
 `);
     console.log(`\uD83D\uDCC1 Config file: ${CONFIG_PATH}`);
     console.log(`
 \uD83C\uDF10 Traefik / Public URLs:`);
-    console.log(`   Dev domain:     ${config2.devDomain}`);
-    console.log(`   Docker host IP: ${config2.dockerHostIp}`);
-    console.log(`   Config dir:     ${config2.traefikConfigDir}`);
+    console.log(`   Dev domain:     ${config.devDomain}`);
+    console.log(`   Docker host IP: ${config.dockerHostIp}`);
+    console.log(`   Config dir:     ${config.traefikConfigDir}`);
     console.log(`
 \uD83D\uDCCB Copy patterns (files auto-copied to worktrees):`);
-    if (config2.copyPatterns && config2.copyPatterns.length > 0) {
-      for (const pattern of config2.copyPatterns) {
+    if (config.copyPatterns && config.copyPatterns.length > 0) {
+      for (const pattern of config.copyPatterns) {
         console.log(`   - ${pattern}`);
       }
     } else {
@@ -3032,8 +3032,8 @@ Configurable keys:`);
     }
     console.log(`
 \uD83D\uDD0C Port allocation:`);
-    console.log(`   Next frontend port: ${config2.nextFrontendPort}`);
-    console.log(`   Next Convex port: ${config2.nextConvexPort}`);
+    console.log(`   Next frontend port: ${config.nextFrontendPort}`);
+    console.log(`   Next Convex port: ${config.nextConvexPort}`);
     console.log(`
 Commands:`);
     console.log(`   zdev config --set devDomain=dev.example.com`);
@@ -3041,31 +3041,31 @@ Commands:`);
     console.log(`   zdev config --remove ".env.local"`);
     return;
   }
-  if (options2.add) {
-    if (!config2.copyPatterns) {
-      config2.copyPatterns = [];
+  if (options.add) {
+    if (!config.copyPatterns) {
+      config.copyPatterns = [];
     }
-    if (config2.copyPatterns.includes(options2.add)) {
-      console.log(`Pattern "${options2.add}" already exists`);
+    if (config.copyPatterns.includes(options.add)) {
+      console.log(`Pattern "${options.add}" already exists`);
     } else {
-      config2.copyPatterns.push(options2.add);
-      saveConfig(config2);
-      console.log(`✅ Added copy pattern: ${options2.add}`);
+      config.copyPatterns.push(options.add);
+      saveConfig(config);
+      console.log(`✅ Added copy pattern: ${options.add}`);
     }
     return;
   }
-  if (options2.remove) {
-    if (!config2.copyPatterns) {
-      console.log(`Pattern "${options2.remove}" not found`);
+  if (options.remove) {
+    if (!config.copyPatterns) {
+      console.log(`Pattern "${options.remove}" not found`);
       return;
     }
-    const index = config2.copyPatterns.indexOf(options2.remove);
+    const index = config.copyPatterns.indexOf(options.remove);
     if (index === -1) {
-      console.log(`Pattern "${options2.remove}" not found`);
+      console.log(`Pattern "${options.remove}" not found`);
     } else {
-      config2.copyPatterns.splice(index, 1);
-      saveConfig(config2);
-      console.log(`✅ Removed copy pattern: ${options2.remove}`);
+      config.copyPatterns.splice(index, 1);
+      saveConfig(config);
+      console.log(`✅ Removed copy pattern: ${options.remove}`);
     }
     return;
   }
@@ -3073,88 +3073,47 @@ Commands:`);
 
 // src/commands/pr.ts
 import { resolve as resolve8, basename as basename4 } from "path";
-async function pr(featureName, projectPath = ".", options2 = {}) {
-  const fullPath = resolve8(projectPath);
-  let worktreePath2 = fullPath;
-  let allocation2;
-  let projectName2 = getRepoName(fullPath) || basename4(fullPath);
-  const config2 = loadConfig();
-  if (featureName) {
-    const allocKey = `${projectName2}-${featureName}`;
-    allocation2 = config2.allocations[allocKey];
-    if (!allocation2) {
-      const found = Object.entries(config2.allocations).find(([key, alloc]) => key.endsWith(`-${featureName}`));
-      if (found) {
-        allocation2 = found[1];
-        projectName2 = allocation2.project;
-      }
-    }
-    if (allocation2) {
-      worktreePath2 = allocation2.worktreePath || resolve8(config2.worktreesDir, `${projectName2}-${featureName}`);
-    }
-  } else {
-    const cwd = process.cwd();
-    const found = Object.entries(config2.allocations).find(([_, alloc]) => alloc.worktreePath === cwd || cwd.startsWith(alloc.worktreePath || ""));
-    if (found) {
-      allocation2 = found[1];
-      featureName = found[0].split("-").slice(1).join("-");
-      projectName2 = allocation2.project;
-      worktreePath2 = allocation2.worktreePath || cwd;
-    }
+function generateWithAI(diff, commits, worktreePath) {
+  const claudeCheck = run("which", ["claude"]);
+  if (!claudeCheck.success) {
+    return null;
   }
-  if (!isGitRepo(worktreePath2)) {
-    console.error(`❌ Not a git repository: ${worktreePath2}`);
-    process.exit(1);
+  const prompt = `You are generating a GitHub PR title and description.
+
+Based on the following git diff and commit messages, generate:
+1. A concise PR title (max 72 chars, no quotes)
+2. A brief description of the changes (2-4 bullet points)
+
+Commit messages:
+${commits.map((c) => `- ${c}`).join(`
+`)}
+
+Diff summary (first 3000 chars):
+${diff.slice(0, 3000)}
+
+Respond in this exact format:
+TITLE: <your title here>
+BODY:
+- <bullet point 1>
+- <bullet point 2>
+- <bullet point 3>`;
+  const result = run("claude", ["-p", prompt, "--no-input"], {
+    cwd: worktreePath,
+    env: { ...process.env, CLAUDE_CODE_ENTRYPOINT: "zdev" }
+  });
+  if (!result.success || !result.stdout) {
+    return null;
   }
-  const branchResult = run("git", ["branch", "--show-current"], { cwd: worktreePath2 });
-  if (!branchResult.success || !branchResult.stdout.trim()) {
-    console.error("❌ Could not determine current branch");
-    process.exit(1);
+  const output = result.stdout.trim();
+  const titleMatch = output.match(/TITLE:\s*(.+)/);
+  const bodyMatch = output.match(/BODY:\s*([\s\S]+)/);
+  if (!titleMatch) {
+    return null;
   }
-  const branch2 = branchResult.stdout.trim();
-  console.log(`\uD83D\uDC02 Creating PR for: ${branch2}`);
-  if (allocation2) {
-    console.log(`   Project: ${projectName2}`);
-    console.log(`   Feature: ${featureName}`);
-  }
-  const ghCheck = run("which", ["gh"]);
-  if (!ghCheck.success) {
-    console.error("❌ GitHub CLI (gh) not found. Install: https://cli.github.com");
-    process.exit(1);
-  }
-  const authCheck = run("gh", ["auth", "status"], { cwd: worktreePath2 });
-  if (!authCheck.success) {
-    console.error("❌ Not authenticated with GitHub. Run: gh auth login");
-    process.exit(1);
-  }
-  console.log(`
-\uD83D\uDCE4 Pushing branch...`);
-  const pushResult = run("git", ["push", "-u", "origin", branch2], { cwd: worktreePath2 });
-  if (!pushResult.success) {
-    if (!pushResult.stderr.includes("Everything up-to-date")) {
-      console.error(`   Failed to push: ${pushResult.stderr}`);
-      process.exit(1);
-    }
-    console.log(`   Already up to date`);
-  } else {
-    console.log(`   Pushed to origin/${branch2}`);
-  }
-  const defaultBranch = run("git", ["symbolic-ref", "refs/remotes/origin/HEAD", "--short"], { cwd: worktreePath2 });
-  const baseBranch = defaultBranch.success ? defaultBranch.stdout.trim().replace("origin/", "") : "main";
-  const commitsResult = run("git", ["log", `origin/${baseBranch}..HEAD`, "--pretty=format:%s"], { cwd: worktreePath2 });
-  const commits = commitsResult.success ? commitsResult.stdout.trim().split(`
-`).filter(Boolean) : [];
-  const filesResult = run("git", ["diff", `origin/${baseBranch}..HEAD`, "--stat", "--stat-width=60"], { cwd: worktreePath2 });
-  const filesSummary = filesResult.success ? filesResult.stdout.trim() : "";
-  const diffStatResult = run("git", ["diff", `origin/${baseBranch}..HEAD`, "--shortstat"], { cwd: worktreePath2 });
-  const diffStat2 = diffStatResult.success ? diffStatResult.stdout.trim() : "";
-  const changedFilesResult = run("git", ["diff", `origin/${baseBranch}..HEAD`, "--name-only"], { cwd: worktreePath2 });
-  const changedFiles = changedFilesResult.success ? changedFilesResult.stdout.trim().split(`
-`).filter(Boolean) : [];
-  let title2 = options2.title;
-  if (!title2) {
-    title2 = generateSmartTitle(changedFiles, commits, featureName || branch2.replace(/^feature\//, ""));
-  }
+  return {
+    title: titleMatch[1].trim().replace(/^["']|["']$/g, ""),
+    body: bodyMatch ? bodyMatch[1].trim() : ""
+  };
 }
 function generateSmartTitle(files, commits, featureName) {
   const components = new Set;
@@ -3208,8 +3167,101 @@ function generateSmartTitle(files, commits, featureName) {
     return commits[0];
   }
   return featureName.split(/[-_]/).map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+}
+async function pr(featureName, projectPath = ".", options = {}) {
+  const fullPath = resolve8(projectPath);
+  let worktreePath = fullPath;
+  let allocation;
+  let projectName = getRepoName(fullPath) || basename4(fullPath);
+  const config = loadConfig();
+  if (featureName) {
+    const allocKey = `${projectName}-${featureName}`;
+    allocation = config.allocations[allocKey];
+    if (!allocation) {
+      const found = Object.entries(config.allocations).find(([key]) => key.endsWith(`-${featureName}`));
+      if (found) {
+        allocation = found[1];
+        projectName = allocation.project;
+      }
+    }
+    if (allocation) {
+      worktreePath = allocation.worktreePath || resolve8(config.worktreesDir, `${projectName}-${featureName}`);
+    }
+  } else {
+    const cwd = process.cwd();
+    const found = Object.entries(config.allocations).find(([_, alloc]) => alloc.worktreePath === cwd || cwd.startsWith(alloc.worktreePath || ""));
+    if (found) {
+      allocation = found[1];
+      featureName = found[0].split("-").slice(1).join("-");
+      projectName = allocation.project;
+      worktreePath = allocation.worktreePath || cwd;
+    }
+  }
+  if (!isGitRepo(worktreePath)) {
+    console.error(`❌ Not a git repository: ${worktreePath}`);
+    process.exit(1);
+  }
+  const branchResult = run("git", ["branch", "--show-current"], { cwd: worktreePath });
+  if (!branchResult.success || !branchResult.stdout.trim()) {
+    console.error("❌ Could not determine current branch");
+    process.exit(1);
+  }
+  const branch = branchResult.stdout.trim();
+  console.log(`\uD83D\uDC02 Creating PR for: ${branch}`);
+  if (allocation) {
+    console.log(`   Project: ${projectName}`);
+    console.log(`   Feature: ${featureName}`);
+  }
+  const ghCheck = run("which", ["gh"]);
+  if (!ghCheck.success) {
+    console.error("❌ GitHub CLI (gh) not found. Install: https://cli.github.com");
+    process.exit(1);
+  }
+  const authCheck = run("gh", ["auth", "status"], { cwd: worktreePath });
+  if (!authCheck.success) {
+    console.error("❌ Not authenticated with GitHub. Run: gh auth login");
+    process.exit(1);
+  }
+  console.log(`
+\uD83D\uDCE4 Pushing branch...`);
+  const pushResult = run("git", ["push", "-u", "origin", branch], { cwd: worktreePath });
+  if (!pushResult.success && !pushResult.stderr.includes("Everything up-to-date")) {
+    console.error(`   Failed to push: ${pushResult.stderr}`);
+    process.exit(1);
+  }
+  console.log(`   Pushed to origin/${branch}`);
+  const defaultBranch = run("git", ["symbolic-ref", "refs/remotes/origin/HEAD", "--short"], { cwd: worktreePath });
+  const baseBranch = defaultBranch.success ? defaultBranch.stdout.trim().replace("origin/", "") : "main";
+  const commitsResult = run("git", ["log", `origin/${baseBranch}..HEAD`, "--pretty=format:%s"], { cwd: worktreePath });
+  const commits = commitsResult.success ? commitsResult.stdout.trim().split(`
+`).filter(Boolean) : [];
+  const diffResult = run("git", ["diff", `origin/${baseBranch}..HEAD`], { cwd: worktreePath });
+  const diff = diffResult.success ? diffResult.stdout : "";
+  const diffStatResult = run("git", ["diff", `origin/${baseBranch}..HEAD`, "--shortstat"], { cwd: worktreePath });
+  const diffStat = diffStatResult.success ? diffStatResult.stdout.trim() : "";
+  const changedFilesResult = run("git", ["diff", `origin/${baseBranch}..HEAD`, "--name-only"], { cwd: worktreePath });
+  const changedFiles = changedFilesResult.success ? changedFilesResult.stdout.trim().split(`
+`).filter(Boolean) : [];
+  let title = options.title;
+  let aiBody = "";
+  if (options.ai || !title && diff.length > 0) {
+    console.log(`
+\uD83E\uDD16 Generating PR content with AI...`);
+    const aiResult = generateWithAI(diff, commits, worktreePath);
+    if (aiResult) {
+      if (!title)
+        title = aiResult.title;
+      aiBody = aiResult.body;
+      console.log(`   Generated title: ${title}`);
+    } else if (options.ai) {
+      console.log(`   AI generation failed, using smart fallback`);
+    }
+  }
+  if (!title) {
+    title = generateSmartTitle(changedFiles, commits, featureName || branch.replace(/^feature\//, ""));
+  }
   let body = options.body || "";
-  if (allocation && allocation.publicUrl) {
+  if (allocation?.publicUrl) {
     body += `## Preview
 \uD83D\uDD17 ${allocation.publicUrl}
 
@@ -3221,7 +3273,12 @@ function generateSmartTitle(files, commits, featureName) {
 
 `;
   }
-  if (commits.length > 0) {
+  if (aiBody) {
+    body += `## Changes
+${aiBody}
+
+`;
+  } else if (commits.length > 0) {
     body += `## Changes
 `;
     commits.forEach((commit) => {
@@ -3258,6 +3315,7 @@ ${diffStat}
   }
   console.log(`
 \uD83D\uDCDD Creating pull request...`);
+  console.log(`   Title: ${title}`);
   const prArgs = ["pr", "create", "--title", title, "--body", body];
   if (options.draft) {
     prArgs.push("--draft");
@@ -3308,32 +3366,32 @@ var __dirname2 = dirname(fileURLToPath(import.meta.url));
 var pkg = JSON.parse(readFileSync5(join4(__dirname2, "..", "package.json"), "utf-8"));
 var program2 = new Command;
 program2.name("zdev").description(`\uD83D\uDC02 zdev v${pkg.version} - Multi-agent worktree development environment`).version(pkg.version);
-program2.command("create <name>").description("Create a new TanStack Start project").option("--convex", "Add Convex backend integration").option("--flat", "Flat structure (no monorepo)").action(async (name, options2) => {
+program2.command("create <name>").description("Create a new TanStack Start project").option("--convex", "Add Convex backend integration").option("--flat", "Flat structure (no monorepo)").action(async (name, options) => {
   await create(name, {
-    convex: options2.convex,
-    flat: options2.flat
+    convex: options.convex,
+    flat: options.flat
   });
 });
-program2.command("init [path]").description("Initialize zdev for a project").option("-s, --seed", "Create initial seed data from current Convex state").action(async (path, options2) => {
-  await init(path, options2);
+program2.command("init [path]").description("Initialize zdev for a project").option("-s, --seed", "Create initial seed data from current Convex state").action(async (path, options) => {
+  await init(path, options);
 });
-program2.command("start <feature>").description("Start working on a feature (creates worktree, starts servers)").option("-p, --project <path>", "Project path (default: current directory)", ".").option("--port <number>", "Frontend port (auto-allocated if not specified)", parseInt).option("--local", "Local only - skip public URL setup via Traefik").option("-s, --seed", "Import seed data into the new worktree").option("-b, --base-branch <branch>", "Base branch to create from (auto-detected if not specified)").option("-w, --web-dir <dir>", "Subdirectory containing package.json (auto-detected if not specified)").action(async (feature, options2) => {
-  await start(feature, options2.project, {
-    port: options2.port,
-    local: options2.local,
-    seed: options2.seed,
-    baseBranch: options2.baseBranch,
-    webDir: options2.webDir
+program2.command("start <feature>").description("Start working on a feature (creates worktree, starts servers)").option("-p, --project <path>", "Project path (default: current directory)", ".").option("--port <number>", "Frontend port (auto-allocated if not specified)", parseInt).option("--local", "Local only - skip public URL setup via Traefik").option("-s, --seed", "Import seed data into the new worktree").option("-b, --base-branch <branch>", "Base branch to create from (auto-detected if not specified)").option("-w, --web-dir <dir>", "Subdirectory containing package.json (auto-detected if not specified)").action(async (feature, options) => {
+  await start(feature, options.project, {
+    port: options.port,
+    local: options.local,
+    seed: options.seed,
+    baseBranch: options.baseBranch,
+    webDir: options.webDir
   });
 });
-program2.command("stop <feature>").description("Stop servers for a feature").option("-p, --project <path>", "Project path (to disambiguate features)").option("-k, --keep", "Keep worktree, just stop servers").action(async (feature, options2) => {
-  await stop(feature, options2);
+program2.command("stop <feature>").description("Stop servers for a feature").option("-p, --project <path>", "Project path (to disambiguate features)").option("-k, --keep", "Keep worktree, just stop servers").action(async (feature, options) => {
+  await stop(feature, options);
 });
-program2.command("list").description("List active features and their status").option("--json", "Output as JSON").action(async (options2) => {
-  await list(options2);
+program2.command("list").description("List active features and their status").option("--json", "Output as JSON").action(async (options) => {
+  await list(options);
 });
-program2.command("clean <feature>").description("Remove a feature worktree (use after PR is merged)").option("-p, --project <path>", "Project path").option("-f, --force", "Force remove even if git worktree fails").action(async (feature, options2) => {
-  await clean(feature, options2);
+program2.command("clean <feature>").description("Remove a feature worktree (use after PR is merged)").option("-p, --project <path>", "Project path").option("-f, --force", "Force remove even if git worktree fails").action(async (feature, options) => {
+  await clean(feature, options);
 });
 var seedCmd = program2.command("seed").description("Manage seed data for projects");
 seedCmd.command("export [path]").description("Export current Convex data as seed").action(async (path) => {
@@ -3342,15 +3400,16 @@ seedCmd.command("export [path]").description("Export current Convex data as seed
 seedCmd.command("import [path]").description("Import seed data into current worktree").action(async (path) => {
   await seedImport(path);
 });
-program2.command("config").description("View and manage zdev configuration").option("-a, --add <pattern>", "Add a file pattern to auto-copy").option("-r, --remove <pattern>", "Remove a file pattern").option("-s, --set <key=value>", "Set a config value (devDomain, dockerHostIp, traefikConfigDir)").option("-l, --list", "List current configuration").action(async (options2) => {
-  await configCmd(options2);
+program2.command("config").description("View and manage zdev configuration").option("-a, --add <pattern>", "Add a file pattern to auto-copy").option("-r, --remove <pattern>", "Remove a file pattern").option("-s, --set <key=value>", "Set a config value (devDomain, dockerHostIp, traefikConfigDir)").option("-l, --list", "List current configuration").action(async (options) => {
+  await configCmd(options);
 });
-program2.command("pr [feature]").description("Create a pull request for a feature branch").option("-p, --project <path>", "Project path", ".").option("-t, --title <title>", "PR title (auto-generated if not specified)").option("-b, --body <body>", "PR body (preview URL auto-added)").option("-d, --draft", "Create as draft PR").option("-w, --web", "Open in browser instead of CLI").action(async (feature, options2) => {
-  await pr(feature, options2.project, {
-    title: options2.title,
-    body: options2.body,
-    draft: options2.draft,
-    web: options2.web
+program2.command("pr [feature]").description("Create a pull request for a feature branch").option("-p, --project <path>", "Project path", ".").option("-t, --title <title>", "PR title (auto-generated if not specified)").option("-b, --body <body>", "PR body (preview URL auto-added)").option("-d, --draft", "Create as draft PR").option("-w, --web", "Open in browser instead of CLI").option("--ai", "Use Claude to generate title and description from diff").action(async (feature, options) => {
+  await pr(feature, options.project, {
+    title: options.title,
+    body: options.body,
+    draft: options.draft,
+    web: options.web,
+    ai: options.ai
   });
 });
 program2.command("status").description("Show zdev status (alias for list)").action(async () => {

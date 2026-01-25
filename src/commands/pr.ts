@@ -8,6 +8,123 @@ export interface PrOptions {
   body?: string;
   draft?: boolean;
   web?: boolean;
+  ai?: boolean;  // Use AI (Claude) to generate title/body
+}
+
+/**
+ * Use Claude to generate PR title and description from diff
+ */
+function generateWithAI(diff: string, commits: string[], worktreePath: string): { title: string; body: string } | null {
+  // Check if claude CLI is available
+  const claudeCheck = run("which", ["claude"]);
+  if (!claudeCheck.success) {
+    return null;
+  }
+
+  const prompt = `You are generating a GitHub PR title and description.
+
+Based on the following git diff and commit messages, generate:
+1. A concise PR title (max 72 chars, no quotes)
+2. A brief description of the changes (2-4 bullet points)
+
+Commit messages:
+${commits.map(c => `- ${c}`).join("\n")}
+
+Diff summary (first 3000 chars):
+${diff.slice(0, 3000)}
+
+Respond in this exact format:
+TITLE: <your title here>
+BODY:
+- <bullet point 1>
+- <bullet point 2>
+- <bullet point 3>`;
+
+  const result = run("claude", ["-p", prompt, "--no-input"], { 
+    cwd: worktreePath,
+    env: { ...process.env, CLAUDE_CODE_ENTRYPOINT: "zdev" }
+  });
+
+  if (!result.success || !result.stdout) {
+    return null;
+  }
+
+  const output = result.stdout.trim();
+  const titleMatch = output.match(/TITLE:\s*(.+)/);
+  const bodyMatch = output.match(/BODY:\s*([\s\S]+)/);
+
+  if (!titleMatch) {
+    return null;
+  }
+
+  return {
+    title: titleMatch[1].trim().replace(/^["']|["']$/g, ""),
+    body: bodyMatch ? bodyMatch[1].trim() : "",
+  };
+}
+
+/**
+ * Generate a smart PR title based on changed files and commits
+ */
+function generateSmartTitle(files: string[], commits: string[], featureName: string): string {
+  const components = new Set<string>();
+  const areas = new Set<string>();
+  
+  for (const file of files) {
+    if (!file.match(/\.(tsx?|jsx?|css|scss)$/)) continue;
+    
+    const componentMatch = file.match(/components\/([^/]+)\/([^/]+)\.(tsx?|jsx?)$/);
+    if (componentMatch) {
+      components.add(componentMatch[2].replace(/\.(tsx?|jsx?)$/, ""));
+      continue;
+    }
+    
+    const singleComponent = file.match(/components\/([^/]+)\.(tsx?|jsx?)$/);
+    if (singleComponent) {
+      components.add(singleComponent[1]);
+      continue;
+    }
+    
+    const routeMatch = file.match(/routes\/(.+)\.(tsx?|jsx?)$/);
+    if (routeMatch) {
+      const routeName = routeMatch[1].replace(/[[\]$_.]/g, " ").trim();
+      if (routeName && routeName !== "index") {
+        areas.add(routeName);
+      }
+      continue;
+    }
+    
+    const pathParts = file.split("/");
+    if (pathParts.length > 1) {
+      const folder = pathParts[pathParts.length - 2];
+      if (!["src", "web", "app", "lib", "utils"].includes(folder)) {
+        areas.add(folder);
+      }
+    }
+  }
+  
+  const items = [...components, ...areas].slice(0, 3);
+  
+  if (items.length > 0) {
+    let action = "Update";
+    const commitText = commits.join(" ").toLowerCase();
+    if (commitText.includes("fix")) action = "Fix";
+    else if (commitText.includes("add") || commitText.includes("new")) action = "Add";
+    else if (commitText.includes("refactor")) action = "Refactor";
+    else if (commitText.includes("improve") || commitText.includes("enhance")) action = "Improve";
+    else if (commitText.includes("mobile") || commitText.includes("responsive")) action = "Improve";
+    
+    return `${action} ${items.join(", ")}`;
+  }
+  
+  if (commits.length > 0 && commits[0].length < 72) {
+    return commits[0];
+  }
+  
+  return featureName
+    .split(/[-_]/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
 export async function pr(
@@ -17,22 +134,20 @@ export async function pr(
 ): Promise<void> {
   const fullPath = resolve(projectPath);
 
-  // Check if we're in a worktree or need to find one
   let worktreePath = fullPath;
   let allocation: WorktreeAllocation | undefined;
   let projectName = getRepoName(fullPath) || basename(fullPath);
 
   const config = loadConfig();
 
-  // If featureName provided, find the allocation
+  // Find allocation if featureName provided
   if (featureName) {
     const allocKey = `${projectName}-${featureName}`;
     allocation = config.allocations[allocKey];
 
     if (!allocation) {
-      // Try to find by just feature name
       const found = Object.entries(config.allocations).find(
-        ([key, alloc]) => key.endsWith(`-${featureName}`)
+        ([key]) => key.endsWith(`-${featureName}`)
       );
       if (found) {
         allocation = found[1];
@@ -44,7 +159,7 @@ export async function pr(
       worktreePath = allocation.worktreePath || resolve(config.worktreesDir, `${projectName}-${featureName}`);
     }
   } else {
-    // Try to detect from current directory
+    // Detect from current directory
     const cwd = process.cwd();
     const found = Object.entries(config.allocations).find(
       ([_, alloc]) => alloc.worktreePath === cwd || cwd.startsWith(alloc.worktreePath || "")
@@ -76,149 +191,82 @@ export async function pr(
     console.log(`   Feature: ${featureName}`);
   }
 
-  // Check if gh CLI is available
+  // Check gh CLI
   const ghCheck = run("which", ["gh"]);
   if (!ghCheck.success) {
     console.error("❌ GitHub CLI (gh) not found. Install: https://cli.github.com");
     process.exit(1);
   }
 
-  // Check if authenticated
   const authCheck = run("gh", ["auth", "status"], { cwd: worktreePath });
   if (!authCheck.success) {
     console.error("❌ Not authenticated with GitHub. Run: gh auth login");
     process.exit(1);
   }
 
-  // Push branch if not pushed
+  // Push branch
   console.log(`\n📤 Pushing branch...`);
   const pushResult = run("git", ["push", "-u", "origin", branch], { cwd: worktreePath });
-  if (!pushResult.success) {
-    // Check if it's just "already up to date"
-    if (!pushResult.stderr.includes("Everything up-to-date")) {
-      console.error(`   Failed to push: ${pushResult.stderr}`);
-      process.exit(1);
-    }
-    console.log(`   Already up to date`);
-  } else {
-    console.log(`   Pushed to origin/${branch}`);
+  if (!pushResult.success && !pushResult.stderr.includes("Everything up-to-date")) {
+    console.error(`   Failed to push: ${pushResult.stderr}`);
+    process.exit(1);
   }
+  console.log(`   Pushed to origin/${branch}`);
 
-  // Get base branch for comparison
+  // Get base branch
   const defaultBranch = run("git", ["symbolic-ref", "refs/remotes/origin/HEAD", "--short"], { cwd: worktreePath });
   const baseBranch = defaultBranch.success ? defaultBranch.stdout.trim().replace("origin/", "") : "main";
 
-  // Get commits since base branch
+  // Get commits and diff info
   const commitsResult = run("git", ["log", `origin/${baseBranch}..HEAD`, "--pretty=format:%s"], { cwd: worktreePath });
   const commits = commitsResult.success ? commitsResult.stdout.trim().split("\n").filter(Boolean) : [];
 
-  // Get files changed
-  const filesResult = run("git", ["diff", `origin/${baseBranch}..HEAD`, "--stat", "--stat-width=60"], { cwd: worktreePath });
-  const filesSummary = filesResult.success ? filesResult.stdout.trim() : "";
+  const diffResult = run("git", ["diff", `origin/${baseBranch}..HEAD`], { cwd: worktreePath });
+  const diff = diffResult.success ? diffResult.stdout : "";
 
-  // Get short diff summary
   const diffStatResult = run("git", ["diff", `origin/${baseBranch}..HEAD`, "--shortstat"], { cwd: worktreePath });
   const diffStat = diffStatResult.success ? diffStatResult.stdout.trim() : "";
 
-  // Get changed files for smart title generation
   const changedFilesResult = run("git", ["diff", `origin/${baseBranch}..HEAD`, "--name-only"], { cwd: worktreePath });
   const changedFiles = changedFilesResult.success ? changedFilesResult.stdout.trim().split("\n").filter(Boolean) : [];
 
-  // Build PR title
+  // Generate title and body
   let title = options.title;
+  let aiBody = "";
+
+  // Try AI generation if --ai flag or no title provided
+  if (options.ai || (!title && diff.length > 0)) {
+    console.log(`\n🤖 Generating PR content with AI...`);
+    const aiResult = generateWithAI(diff, commits, worktreePath);
+    if (aiResult) {
+      if (!title) title = aiResult.title;
+      aiBody = aiResult.body;
+      console.log(`   Generated title: ${title}`);
+    } else if (options.ai) {
+      console.log(`   AI generation failed, using smart fallback`);
+    }
+  }
+
+  // Fallback to smart title
   if (!title) {
-    // Try to generate smart title from changed files
     title = generateSmartTitle(changedFiles, commits, featureName || branch.replace(/^feature\//, ""));
   }
-}
-
-/**
- * Generate a smart PR title based on changed files and commits
- */
-function generateSmartTitle(files: string[], commits: string[], featureName: string): string {
-  // Extract meaningful names from file paths
-  const components = new Set<string>();
-  const areas = new Set<string>();
-  
-  for (const file of files) {
-    // Skip non-code files
-    if (!file.match(/\.(tsx?|jsx?|css|scss)$/)) continue;
-    
-    // Extract component names from paths like src/components/OrderCard.tsx
-    const componentMatch = file.match(/components\/([^/]+)\/([^/]+)\.(tsx?|jsx?)$/);
-    if (componentMatch) {
-      components.add(componentMatch[2].replace(/\.(tsx?|jsx?)$/, ""));
-      continue;
-    }
-    
-    // Single component file
-    const singleComponent = file.match(/components\/([^/]+)\.(tsx?|jsx?)$/);
-    if (singleComponent) {
-      components.add(singleComponent[1]);
-      continue;
-    }
-    
-    // Routes
-    const routeMatch = file.match(/routes\/(.+)\.(tsx?|jsx?)$/);
-    if (routeMatch) {
-      const routeName = routeMatch[1].replace(/[[\]$_.]/g, " ").trim();
-      if (routeName && routeName !== "index") {
-        areas.add(routeName);
-      }
-      continue;
-    }
-    
-    // Other meaningful paths
-    const pathParts = file.split("/");
-    if (pathParts.length > 1) {
-      const folder = pathParts[pathParts.length - 2];
-      if (!["src", "web", "app", "lib", "utils"].includes(folder)) {
-        areas.add(folder);
-      }
-    }
-  }
-  
-  // Build title from components/areas
-  const items = [...components, ...areas].slice(0, 3);
-  
-  if (items.length > 0) {
-    // Determine action from commits
-    let action = "Update";
-    const commitText = commits.join(" ").toLowerCase();
-    if (commitText.includes("fix")) action = "Fix";
-    else if (commitText.includes("add") || commitText.includes("new")) action = "Add";
-    else if (commitText.includes("refactor")) action = "Refactor";
-    else if (commitText.includes("improve") || commitText.includes("enhance")) action = "Improve";
-    else if (commitText.includes("mobile") || commitText.includes("responsive")) action = "Improve";
-    
-    return `${action} ${items.join(", ")}`;
-  }
-  
-  // Fallback: use first commit or feature name
-  if (commits.length > 0 && commits[0].length < 72) {
-    return commits[0];
-  }
-  
-  // Final fallback: humanize feature name
-  return featureName
-    .split(/[-_]/)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
 
   // Build PR body
   let body = options.body || "";
   
-  // Add preview URL if we have allocation
-  if (allocation && allocation.publicUrl) {
+  // Add preview URL
+  if (allocation?.publicUrl) {
     body += `## Preview\n🔗 ${allocation.publicUrl}\n\n`;
   } else if (config.devDomain && featureName && projectName) {
-    // Try to construct preview URL
     const previewUrl = `https://${projectName}-${featureName}.${config.devDomain}`;
     body += `## Preview\n🔗 ${previewUrl}\n\n`;
   }
 
-  // Add commits section if we have commits
-  if (commits.length > 0) {
+  // Add AI-generated body or commits
+  if (aiBody) {
+    body += `## Changes\n${aiBody}\n\n`;
+  } else if (commits.length > 0) {
     body += `## Changes\n`;
     commits.forEach((commit) => {
       body += `- ${commit}\n`;
@@ -226,7 +274,7 @@ function generateSmartTitle(files: string[], commits: string[], featureName: str
     body += "\n";
   }
 
-  // Add files changed
+  // Add stats
   if (diffStat) {
     body += `## Summary\n\`\`\`\n${diffStat}\n\`\`\`\n\n`;
   }
@@ -251,6 +299,7 @@ function generateSmartTitle(files: string[], commits: string[], featureName: str
 
   // Create PR
   console.log(`\n📝 Creating pull request...`);
+  console.log(`   Title: ${title}`);
   
   const prArgs = ["pr", "create", "--title", title, "--body", body];
   
@@ -272,7 +321,6 @@ function generateSmartTitle(files: string[], commits: string[], featureName: str
   const prResult = run("gh", prArgs, { cwd: worktreePath });
   
   if (!prResult.success) {
-    // Check if it's because PR already exists
     if (prResult.stderr.includes("already exists")) {
       console.log(`   PR already exists for this branch`);
       const viewResult = run("gh", ["pr", "view", "--json", "url"], { cwd: worktreePath });
@@ -280,9 +328,7 @@ function generateSmartTitle(files: string[], commits: string[], featureName: str
         try {
           const prData = JSON.parse(viewResult.stdout);
           console.log(`\n🔗 ${prData.url}`);
-        } catch {
-          // Ignore
-        }
+        } catch {}
       }
       return;
     }
@@ -290,13 +336,11 @@ function generateSmartTitle(files: string[], commits: string[], featureName: str
     process.exit(1);
   }
 
-  // Extract PR URL from output
   const prUrl = prResult.stdout.trim();
   
   console.log(`\n✅ Pull request created!`);
   console.log(`\n🔗 ${prUrl}`);
 
-  // Show preview URL again for easy access
   if (allocation?.publicUrl) {
     console.log(`\n📱 Preview: ${allocation.publicUrl}`);
   }
