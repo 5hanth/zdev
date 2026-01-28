@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { resolve, basename, join } from "path";
+import { patchViteAllowedHosts } from "../vite-patch.js";
 import {
   isGitRepo,
   getRepoName,
@@ -219,41 +220,14 @@ export async function start(
   const viteConfigPath = existsSync(viteConfigTsPath) ? viteConfigTsPath : 
                          existsSync(viteConfigJsPath) ? viteConfigJsPath : null;
   
-  if (viteConfigPath) {
-    try {
-      let viteConfig = readFileSync(viteConfigPath, "utf-8");
-      
-      // Only patch if allowedHosts not already present
-      if (!viteConfig.includes("allowedHosts")) {
-        let patched = false;
-        
-        // Try to add allowedHosts to existing server block
-        if (viteConfig.includes("server:") || viteConfig.includes("server :")) {
-          // Add allowedHosts inside existing server block
-          viteConfig = viteConfig.replace(
-            /server\s*:\s*\{/,
-            "server: {\n    allowedHosts: true,"
-          );
-          patched = true;
-        } else if (viteConfig.includes("defineConfig({")) {
-          // No server block, add new one
-          viteConfig = viteConfig.replace(
-            /defineConfig\(\{/,
-            "defineConfig({\n  server: {\n    allowedHosts: true,\n  },"
-          );
-          patched = true;
-        }
-        
-        if (patched) {
-          writeFileSync(viteConfigPath, viteConfig);
-          console.log(`   Patched ${basename(viteConfigPath)} for external access`);
-          
-          // Mark file as skip-worktree so it won't be committed
-          run("git", ["update-index", "--skip-worktree", basename(viteConfigPath)], { cwd: webPath });
-        }
-      }
-    } catch (e) {
-      console.log(`   Could not patch vite config (non-critical)`);
+  if (viteConfigPath && config.devDomain) {
+    const result = patchViteAllowedHosts(viteConfigPath, config.devDomain);
+    if (result.patched) {
+      console.log(`   Patched ${basename(viteConfigPath)}: ${result.reason}`);
+      // Mark file as skip-worktree so it won't be committed
+      run("git", ["update-index", "--skip-worktree", basename(viteConfigPath)], { cwd: webPath });
+    } else {
+      console.log(`   Vite config: ${result.reason}`);
     }
   }
 

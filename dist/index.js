@@ -2461,8 +2461,65 @@ Next steps:`);
 }
 
 // src/commands/start.ts
-import { existsSync as existsSync5, readFileSync as readFileSync4, writeFileSync as writeFileSync5 } from "fs";
+import { existsSync as existsSync5, readFileSync as readFileSync5, writeFileSync as writeFileSync6 } from "fs";
 import { resolve as resolve4, basename as basename3, join as join3 } from "path";
+
+// src/vite-patch.ts
+import { readFileSync as readFileSync4, writeFileSync as writeFileSync5 } from "fs";
+function patchViteAllowedHosts(viteConfigPath, devDomain) {
+  if (!devDomain) {
+    return { patched: false, reason: "no devDomain configured" };
+  }
+  let content;
+  try {
+    content = readFileSync4(viteConfigPath, "utf-8");
+  } catch {
+    return { patched: false, reason: "could not read vite config" };
+  }
+  const domainPattern = `.${devDomain}`;
+  if (content.includes(domainPattern)) {
+    return { patched: false, reason: "domain already present" };
+  }
+  if (/allowedHosts\s*:\s*true/.test(content)) {
+    return { patched: false, reason: "already allows all hosts (true)" };
+  }
+  if (/allowedHosts\s*:\s*["']all["']/.test(content)) {
+    return { patched: false, reason: 'already allows all hosts ("all")' };
+  }
+  const entry = `"${domainPattern}"`;
+  let patched = false;
+  if (/allowedHosts\s*:\s*\[/.test(content)) {
+    content = content.replace(/(allowedHosts\s*:\s*\[)/, `$1${entry}, `);
+    patched = true;
+  } else if (/server\s*:\s*\{/.test(content)) {
+    content = content.replace(/(server\s*:\s*\{)/, `$1
+    allowedHosts: [${entry}],`);
+    patched = true;
+  } else if (/defineConfig\s*\(\s*\{/.test(content)) {
+    content = content.replace(/(defineConfig\s*\(\s*\{)/, `$1
+  server: {
+    allowedHosts: [${entry}],
+  },`);
+    patched = true;
+  } else if (/export\s+default\s*\{/.test(content)) {
+    content = content.replace(/(export\s+default\s*\{)/, `$1
+  server: {
+    allowedHosts: [${entry}],
+  },`);
+    patched = true;
+  }
+  if (!patched) {
+    return { patched: false, reason: "unrecognized config format" };
+  }
+  try {
+    writeFileSync5(viteConfigPath, content);
+  } catch {
+    return { patched: false, reason: "could not write vite config" };
+  }
+  return { patched: true, reason: "added allowedHosts" };
+}
+
+// src/commands/start.ts
 function detectWebDir(worktreePath) {
   const commonDirs = ["web", "frontend", "app", "client", "packages/web", "apps/web"];
   for (const dir of commonDirs) {
@@ -2548,8 +2605,8 @@ async function start(featureName, projectPath = ".", options = {}) {
       const destPath = join3(webPath, pattern);
       if (existsSync5(srcPath) && !existsSync5(destPath)) {
         try {
-          const content = readFileSync4(srcPath);
-          writeFileSync5(destPath, content);
+          const content = readFileSync5(srcPath);
+          writeFileSync6(destPath, content);
           console.log(`   Copied ${pattern}`);
         } catch (e) {
           console.log(`   Could not copy ${pattern}`);
@@ -2604,30 +2661,13 @@ async function start(featureName, projectPath = ".", options = {}) {
   const viteConfigTsPath = join3(webPath, "vite.config.ts");
   const viteConfigJsPath = join3(webPath, "vite.config.js");
   const viteConfigPath = existsSync5(viteConfigTsPath) ? viteConfigTsPath : existsSync5(viteConfigJsPath) ? viteConfigJsPath : null;
-  if (viteConfigPath) {
-    try {
-      let viteConfig = readFileSync4(viteConfigPath, "utf-8");
-      if (!viteConfig.includes("allowedHosts")) {
-        let patched = false;
-        if (viteConfig.includes("server:") || viteConfig.includes("server :")) {
-          viteConfig = viteConfig.replace(/server\s*:\s*\{/, `server: {
-    allowedHosts: true,`);
-          patched = true;
-        } else if (viteConfig.includes("defineConfig({")) {
-          viteConfig = viteConfig.replace(/defineConfig\(\{/, `defineConfig({
-  server: {
-    allowedHosts: true,
-  },`);
-          patched = true;
-        }
-        if (patched) {
-          writeFileSync5(viteConfigPath, viteConfig);
-          console.log(`   Patched ${basename3(viteConfigPath)} for external access`);
-          run("git", ["update-index", "--skip-worktree", basename3(viteConfigPath)], { cwd: webPath });
-        }
-      }
-    } catch (e) {
-      console.log(`   Could not patch vite config (non-critical)`);
+  if (viteConfigPath && config.devDomain) {
+    const result = patchViteAllowedHosts(viteConfigPath, config.devDomain);
+    if (result.patched) {
+      console.log(`   Patched ${basename3(viteConfigPath)}: ${result.reason}`);
+      run("git", ["update-index", "--skip-worktree", basename3(viteConfigPath)], { cwd: webPath });
+    } else {
+      console.log(`   Vite config: ${result.reason}`);
     }
   }
   console.log(`
@@ -3393,11 +3433,11 @@ ${diffStat}
 }
 
 // src/index.ts
-import { readFileSync as readFileSync5 } from "fs";
+import { readFileSync as readFileSync6 } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join as join4 } from "path";
 var __dirname2 = dirname(fileURLToPath(import.meta.url));
-var pkg = JSON.parse(readFileSync5(join4(__dirname2, "..", "package.json"), "utf-8"));
+var pkg = JSON.parse(readFileSync6(join4(__dirname2, "..", "package.json"), "utf-8"));
 var program2 = new Command;
 program2.name("zdev").description(`\uD83D\uDC02 zdev v${pkg.version} - Multi-agent worktree development environment`).version(pkg.version);
 program2.command("create <name>").description("Create a new TanStack Start project").option("--convex", "Add Convex backend integration").option("--flat", "Flat structure (no monorepo)").action(async (name, options) => {
