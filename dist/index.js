@@ -2466,57 +2466,130 @@ import { resolve as resolve4, basename as basename3, join as join3 } from "path"
 
 // src/vite-patch.ts
 import { readFileSync as readFileSync4, writeFileSync as writeFileSync5 } from "fs";
-function patchViteAllowedHosts(viteConfigPath, devDomain) {
-  if (!devDomain) {
-    return { patched: false, reason: "no devDomain configured" };
-  }
+function patchViteConfig(viteConfigPath, options) {
+  const actions = [];
   let content;
   try {
     content = readFileSync4(viteConfigPath, "utf-8");
   } catch {
-    return { patched: false, reason: "could not read vite config" };
+    return { patched: false, actions: ["could not read vite config"] };
   }
-  const domainPattern = `.${devDomain}`;
-  if (content.includes(domainPattern)) {
-    return { patched: false, reason: "domain already present" };
+  const original = content;
+  if (options.devDomain) {
+    content = patchAllowedHosts(content, options.devDomain, actions);
   }
-  if (/allowedHosts\s*:\s*true/.test(content)) {
-    return { patched: false, reason: "already allows all hosts (true)" };
+  if (options.serverPort) {
+    content = patchServerPort(content, options.serverPort, actions);
   }
-  if (/allowedHosts\s*:\s*["']all["']/.test(content)) {
-    return { patched: false, reason: 'already allows all hosts ("all")' };
+  if (options.devtoolsPort) {
+    content = patchDevtoolsPort(content, options.devtoolsPort, actions);
   }
-  const entry = `"${domainPattern}"`;
-  let patched = false;
-  if (/allowedHosts\s*:\s*\[/.test(content)) {
-    content = content.replace(/(allowedHosts\s*:\s*\[)/, `$1${entry}, `);
-    patched = true;
-  } else if (/server\s*:\s*\{/.test(content)) {
-    content = content.replace(/(server\s*:\s*\{)/, `$1
-    allowedHosts: [${entry}],`);
-    patched = true;
-  } else if (/defineConfig\s*\(\s*\{/.test(content)) {
-    content = content.replace(/(defineConfig\s*\(\s*\{)/, `$1
-  server: {
-    allowedHosts: [${entry}],
-  },`);
-    patched = true;
-  } else if (/export\s+default\s*\{/.test(content)) {
-    content = content.replace(/(export\s+default\s*\{)/, `$1
-  server: {
-    allowedHosts: [${entry}],
-  },`);
-    patched = true;
-  }
-  if (!patched) {
-    return { patched: false, reason: "unrecognized config format" };
+  if (content === original) {
+    return { patched: false, actions: actions.length ? actions : ["no changes needed"] };
   }
   try {
     writeFileSync5(viteConfigPath, content);
   } catch {
-    return { patched: false, reason: "could not write vite config" };
+    return { patched: false, actions: ["could not write vite config"] };
   }
-  return { patched: true, reason: "added allowedHosts" };
+  return { patched: true, actions };
+}
+function patchAllowedHosts(content, devDomain, actions) {
+  const domainPattern = `.${devDomain}`;
+  if (content.includes(domainPattern)) {
+    actions.push("allowedHosts: domain already present");
+    return content;
+  }
+  if (/allowedHosts\s*:\s*true/.test(content)) {
+    actions.push("allowedHosts: already allows all (true)");
+    return content;
+  }
+  if (/allowedHosts\s*:\s*["']all["']/.test(content)) {
+    actions.push('allowedHosts: already allows all ("all")');
+    return content;
+  }
+  const entry = `"${domainPattern}"`;
+  if (/allowedHosts\s*:\s*\[/.test(content)) {
+    content = content.replace(/(allowedHosts\s*:\s*\[)/, `$1${entry}, `);
+    actions.push("allowedHosts: appended domain");
+    return content;
+  }
+  if (/server\s*:\s*\{/.test(content)) {
+    content = content.replace(/(server\s*:\s*\{)/, `$1
+    allowedHosts: [${entry}],`);
+    actions.push("allowedHosts: added to server block");
+    return content;
+  }
+  content = ensureServerBlock(content);
+  if (/server\s*:\s*\{/.test(content)) {
+    content = content.replace(/(server\s*:\s*\{)/, `$1
+    allowedHosts: [${entry}],`);
+    actions.push("allowedHosts: created server block");
+  } else {
+    actions.push("allowedHosts: unrecognized config format");
+  }
+  return content;
+}
+function patchServerPort(content, port, actions) {
+  if (/server\s*:\s*\{[^}]*\bport\s*:/.test(content)) {
+    content = content.replace(/(server\s*:\s*\{[^}]*\bport\s*:\s*)\d+/, `$1${port}`);
+    actions.push(`server.port: replaced with ${port}`);
+    return content;
+  }
+  if (/server\s*:\s*\{/.test(content)) {
+    content = content.replace(/(server\s*:\s*\{)/, `$1
+    port: ${port},`);
+    actions.push(`server.port: injected ${port}`);
+    return content;
+  }
+  content = ensureServerBlock(content);
+  if (/server\s*:\s*\{/.test(content)) {
+    content = content.replace(/(server\s*:\s*\{)/, `$1
+    port: ${port},`);
+    actions.push(`server.port: created server block with port ${port}`);
+  } else {
+    actions.push("server.port: unrecognized config format");
+  }
+  return content;
+}
+function patchDevtoolsPort(content, port, actions) {
+  if (!content.includes("devtools")) {
+    actions.push("devtools: not found, skipped");
+    return content;
+  }
+  if (/devtools\s*\([^)]*eventBusConfig\s*:\s*\{[^}]*port\s*:/.test(content)) {
+    content = content.replace(/(devtools\s*\([^)]*eventBusConfig\s*:\s*\{[^}]*port\s*:\s*)\d+/, `$1${port}`);
+    actions.push(`devtools: updated eventBusConfig.port to ${port}`);
+    return content;
+  }
+  if (/devtools\s*\(\s*\)/.test(content)) {
+    content = content.replace(/devtools\s*\(\s*\)/, `devtools({ eventBusConfig: { port: ${port} } })`);
+    actions.push(`devtools: injected eventBusConfig.port ${port}`);
+    return content;
+  }
+  if (/devtools\s*\(\s*\{/.test(content)) {
+    content = content.replace(/(devtools\s*\(\s*\{)/, `$1 eventBusConfig: { port: ${port} },`);
+    actions.push(`devtools: added eventBusConfig.port ${port}`);
+    return content;
+  }
+  actions.push("devtools: unrecognized call pattern");
+  return content;
+}
+function ensureServerBlock(content) {
+  if (/server\s*:\s*\{/.test(content)) {
+    return content;
+  }
+  if (/defineConfig\s*\(\s*\{/.test(content)) {
+    return content.replace(/(defineConfig\s*\(\s*\{)/, `$1
+  server: {
+  },`);
+  }
+  if (/export\s+default\s*\{/.test(content)) {
+    return content.replace(/(export\s+default\s*\{)/, `$1
+  server: {
+  },`);
+  }
+  return content;
 }
 
 // src/commands/start.ts
@@ -2661,13 +2734,21 @@ async function start(featureName, projectPath = ".", options = {}) {
   const viteConfigTsPath = join3(webPath, "vite.config.ts");
   const viteConfigJsPath = join3(webPath, "vite.config.js");
   const viteConfigPath = existsSync5(viteConfigTsPath) ? viteConfigTsPath : existsSync5(viteConfigJsPath) ? viteConfigJsPath : null;
-  if (viteConfigPath && config.devDomain) {
-    const result = patchViteAllowedHosts(viteConfigPath, config.devDomain);
+  if (viteConfigPath) {
+    const devtoolsPort = ports.frontend + 37000;
+    const result = patchViteConfig(viteConfigPath, {
+      devDomain: config.devDomain || undefined,
+      serverPort: ports.frontend,
+      devtoolsPort
+    });
     if (result.patched) {
-      console.log(`   Patched ${basename3(viteConfigPath)}: ${result.reason}`);
+      console.log(`   Patched ${basename3(viteConfigPath)}:`);
+      for (const action of result.actions) {
+        console.log(`     • ${action}`);
+      }
       run("git", ["update-index", "--skip-worktree", basename3(viteConfigPath)], { cwd: webPath });
     } else {
-      console.log(`   Vite config: ${result.reason}`);
+      console.log(`   Vite config: ${result.actions.join("; ")}`);
     }
   }
   console.log(`
