@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { resolve, basename, join } from "path";
-import { patchViteAllowedHosts } from "../vite-patch.js";
+import { patchViteConfig } from "../vite-patch.js";
 import {
   isGitRepo,
   getRepoName,
@@ -214,20 +214,28 @@ export async function start(
     await new Promise((resolve) => setTimeout(resolve, 2000));
   }
   
-  // Patch vite.config to allow external hosts (for Traefik access)
+  // Patch vite.config for worktree (allowedHosts, port, devtools)
   const viteConfigTsPath = join(webPath, "vite.config.ts");
   const viteConfigJsPath = join(webPath, "vite.config.js");
   const viteConfigPath = existsSync(viteConfigTsPath) ? viteConfigTsPath : 
                          existsSync(viteConfigJsPath) ? viteConfigJsPath : null;
   
-  if (viteConfigPath && config.devDomain) {
-    const result = patchViteAllowedHosts(viteConfigPath, config.devDomain);
+  if (viteConfigPath) {
+    const devtoolsPort = ports.frontend + 37000; // e.g. 5188 → 42188
+    const result = patchViteConfig(viteConfigPath, {
+      devDomain: config.devDomain || undefined,
+      serverPort: ports.frontend,
+      devtoolsPort,
+    });
     if (result.patched) {
-      console.log(`   Patched ${basename(viteConfigPath)}: ${result.reason}`);
+      console.log(`   Patched ${basename(viteConfigPath)}:`);
+      for (const action of result.actions) {
+        console.log(`     • ${action}`);
+      }
       // Mark file as skip-worktree so it won't be committed
       run("git", ["update-index", "--skip-worktree", basename(viteConfigPath)], { cwd: webPath });
     } else {
-      console.log(`   Vite config: ${result.reason}`);
+      console.log(`   Vite config: ${result.actions.join("; ")}`);
     }
   }
 
